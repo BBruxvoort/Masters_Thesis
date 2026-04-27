@@ -1,0 +1,549 @@
+---
+title: "Pitch Prediction 2"
+author: "Brian Bruxvoort"
+format: pdf
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Load Required Libraries
+
+```{r libraries}
+library(tidyverse)
+library(nnet)  # For multinomial logistic regression
+library(caret) # For confusion matrix and model evaluation
+```
+
+## Option to Load Pre-Built Models
+
+```{r}
+pitch_data <- read.csv("~/Truman_PDAT_630/Thesis_Project/pitch_data.csv")
+```
+
+```{r}
+selected_columns2 <- c(
+  "pitch_type", "player_name", "batter", "pitcher", "events", 
+  "description", "zone", "stand", "p_throws", "type", "hit_location",
+  "bb_type", "balls", "strikes", "pfx_x", "pfx_z", "plate_x", "plate_z",
+  "outs_when_up", "inning", "sz_top", "sz_bot", "effective_speed",
+  "release_spin_rate", "release_extension", "release_pos_y",
+  "at_bat_number", "pitch_number", "pitch_name", "spin_axis",
+  "n_thruorder_pitcher", "arm_angle")
+
+pitch_data_clean2 <- pitch_data[, selected_columns2]
+```
+
+```{r}
+selected_columns <- c(
+  "pitch_type", "player_name", "zone", "stand", "balls", "strikes", "at_bat_number", "pitch_number","n_thruorder_pitcher")
+
+pitch_data_clean <- pitch_data[, selected_columns]
+```
+
+```{r}
+summary(pitch_data_clean)
+```
+
+```{r load-data}
+head(pitch_data_clean)
+```
+
+## Data Preparation: Create Lagged Features
+
+```{r create-lagged-features}
+# Sort data by pitcher, at-bat, and pitch number to ensure correct sequence
+pitch_data_sorted <- pitch_data_clean %>%
+  arrange(player_name, at_bat_number, pitch_number)
+
+# Create lagged features for each at-bat
+pitch_data_features <- pitch_data_sorted %>%
+  group_by(player_name, at_bat_number) %>%
+  mutate(
+    # Previous pitch features (lag 1)
+    prev_pitch_type_1 = lag(pitch_type, 1),
+    prev_zone_1 = lag(zone, 1),
+    
+    # Previous pitch features (lag 2)
+    prev_pitch_type_2 = lag(pitch_type, 2),
+    prev_zone_2 = lag(zone, 2),
+    
+    # Previous pitch features (lag 3)
+    prev_pitch_type_3 = lag(pitch_type, 3),
+    prev_zone_3 = lag(zone, 3)
+  ) %>%
+  ungroup() %>%
+  # Remove first pitch of each at-bat (no previous pitch to predict from)
+  filter(!is.na(prev_pitch_type_1)) %>%
+  # Convert categorical variables to factors
+  mutate(
+    pitch_type = as.factor(pitch_type),
+    prev_pitch_type_1 = as.factor(prev_pitch_type_1),
+    prev_pitch_type_2 = as.factor(prev_pitch_type_2),
+    prev_pitch_type_3 = as.factor(prev_pitch_type_3),
+    prev_zone_1 = as.factor(prev_zone_1),
+    prev_zone_2 = as.factor(prev_zone_2),
+    prev_zone_3 = as.factor(prev_zone_3),
+    zone = as.factor(zone),
+    stand = as.factor(stand),
+    balls = as.factor(balls),
+    strikes = as.factor(strikes)
+  )
+
+# Check the prepared data
+head(pitch_data_features)
+```
+
+## Explore Data for Model Building
+
+```{r explore-data}
+# Check number of pitches per pitcher
+pitcher_counts <- pitch_data_features %>%
+  group_by(player_name) %>%
+  summarise(
+    n_pitches = n(),
+    n_pitch_types = n_distinct(pitch_type)
+  ) %>%
+  arrange(desc(n_pitches))
+
+print(pitcher_counts)
+
+# Filter pitchers with sufficient data (at least 50 pitches)
+pitchers_sufficient_data <- pitcher_counts %>%
+  filter(n_pitches >= 50) %>%
+  pull(player_name)
+
+cat("\nNumber of pitchers with sufficient data:", length(pitchers_sufficient_data))
+```
+
+## Build Multinomial Logistic Regression Models (Type AND Location)
+
+```{r build-models}
+# # Function to build PITCH TYPE model for a single pitcher
+# build_pitcher_type_model <- function(pitcher_data) {
+#   tryCatch({
+#     # Build multinomial logistic regression model for PITCH TYPE
+#     model <- multinom(
+#       pitch_type ~ prev_pitch_type_1 + prev_zone_1 +
+#                    prev_pitch_type_2 + prev_zone_2 +
+#                    balls + strikes + stand,
+#       data = pitcher_data,
+#       maxit = 500,
+#       trace = FALSE
+#     )
+#     return(model)
+#   }, error = function(e) {
+#     return(NULL)
+#   })
+# }
+# 
+# # Function to build ZONE (location) model for a single pitcher
+# build_pitcher_zone_model <- function(pitcher_data) {
+#   tryCatch({
+#     # Build multinomial logistic regression model for ZONE (location)
+#     model <- multinom(
+#       zone ~ prev_pitch_type_1 + prev_zone_1 +
+#              prev_pitch_type_2 + prev_zone_2 +
+#              balls + strikes + stand,
+#       data = pitcher_data,
+#       maxit = 500,
+#       trace = FALSE
+#     )
+#     return(model)
+#   }, error = function(e) {
+#     return(NULL)
+#   })
+# }
+# 
+# # Build both models for each pitcher
+# pitcher_type_models <- list()
+# pitcher_zone_models <- list()
+# 
+# for (pitcher in pitchers_sufficient_data) {
+#   cat("\nBuilding models for:", pitcher)
+# 
+#   pitcher_data <- pitch_data_features %>%
+#     filter(player_name == pitcher)
+# 
+#   # Build pitch type model
+#   type_model <- build_pitcher_type_model(pitcher_data)
+#   if (!is.null(type_model)) {
+#     pitcher_type_models[[pitcher]] <- type_model
+#     cat(" - Type: Success")
+#   } else {
+#     cat(" - Type: Failed")
+#   }
+# 
+#   # Build zone model
+#   zone_model <- build_pitcher_zone_model(pitcher_data)
+#   if (!is.null(zone_model)) {
+#     pitcher_zone_models[[pitcher]] <- zone_model
+#     cat(" | Zone: Success")
+#   } else {
+#     cat(" | Zone: Failed")
+#   }
+# }
+# 
+# cat("\n\nTotal pitch type models built:", length(pitcher_type_models))
+# cat("\nTotal zone models built:", length(pitcher_zone_models))
+```
+
+## Evaluate Model Performance
+
+```{r evaluate-models}
+# Function to evaluate a pitcher's PITCH TYPE model
+evaluate_pitcher_type_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type), na.rm = TRUE)
+    
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type)
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+      
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) NULL)
+    
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+# Function to evaluate a pitcher's ZONE model
+evaluate_pitcher_zone_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$zone), na.rm = TRUE)
+    
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$zone)
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+      
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) NULL)
+    
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+# Evaluate all type models
+type_model_evaluations <- list()
+for (pitcher in names(pitcher_type_models)) {
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+  
+  eval <- evaluate_pitcher_type_model(pitcher, pitcher_type_models[[pitcher]], pitcher_data)
+  type_model_evaluations[[pitcher]] <- eval
+}
+
+# Evaluate all zone models
+zone_model_evaluations <- list()
+for (pitcher in names(pitcher_zone_models)) {
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+  
+  eval <- evaluate_pitcher_zone_model(pitcher, pitcher_zone_models[[pitcher]], pitcher_data)
+  zone_model_evaluations[[pitcher]] <- eval
+}
+
+# Summary of PITCH TYPE model accuracies
+type_accuracy_summary <- data.frame(
+  pitcher = names(type_model_evaluations),
+  type_accuracy = sapply(type_model_evaluations, function(x) x$accuracy),
+  type_error = sapply(type_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })
+)
+
+# Summary of ZONE model accuracies
+zone_accuracy_summary <- data.frame(
+  pitcher = names(zone_model_evaluations),
+  zone_accuracy = sapply(zone_model_evaluations, function(x) x$accuracy),
+  zone_error = sapply(zone_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })
+)
+
+# Combined summary
+combined_accuracy_summary <- type_accuracy_summary %>%
+  full_join(zone_accuracy_summary, by = "pitcher") %>%
+  arrange(desc(type_accuracy))
+
+print(combined_accuracy_summary)
+
+# Summary statistics
+cat("\n\n=== PITCH TYPE MODEL PERFORMANCE ===\n")
+cat("Models with errors:", sum(!is.na(type_accuracy_summary$type_error)), "\n")
+cat("Models successful:", sum(is.na(type_accuracy_summary$type_error) & !is.na(type_accuracy_summary$type_accuracy)), "\n")
+cat("Mean accuracy:", round(mean(type_accuracy_summary$type_accuracy, na.rm = TRUE), 4), "\n")
+
+cat("\n=== ZONE MODEL PERFORMANCE ===\n")
+cat("Models with errors:", sum(!is.na(zone_accuracy_summary$zone_error)), "\n")
+cat("Models successful:", sum(is.na(zone_accuracy_summary$zone_error) & !is.na(zone_accuracy_summary$zone_accuracy)), "\n")
+cat("Mean accuracy:", round(mean(zone_accuracy_summary$zone_accuracy, na.rm = TRUE), 4), "\n")
+```
+
+## Save Models for Future Use
+```{r save-separate-models}
+# # Save the separate type and zone models
+# cat("Saving type and zone models...\n")
+# saveRDS(pitcher_type_models, file = "pitcher_type_models_separate.rds")
+# saveRDS(pitcher_zone_models, file = "pitcher_zone_models_separate.rds")
+# saveRDS(pitch_data_features, file = "pitch_data_features_separate.rds")
+# saveRDS(type_model_evaluations, file = "type_model_evaluations_separate.rds")
+# saveRDS(zone_model_evaluations, file = "zone_model_evaluations_separate.rds")
+# 
+# cat("\nModels saved successfully!\n")
+# cat("Files created:\n")
+# cat("  - pitcher_type_models_separate.rds\n")
+# cat("  - pitcher_zone_models_separate.rds\n")
+# cat("  - pitch_data_features_separate.rds\n")
+# cat("  - type_model_evaluations_separate.rds\n")
+# cat("  - zone_model_evaluations_separate.rds\n")
+```
+
+## Example: Detailed Results for One Pitcher
+
+```{r example-pitcher}
+# Select the first pitcher with both models
+example_pitcher <- intersect(names(pitcher_type_models), names(pitcher_zone_models))[1]
+
+cat("Detailed results for:", example_pitcher, "\n\n")
+
+# PITCH TYPE MODEL
+cat("========== PITCH TYPE MODEL ==========\n")
+cat("Model Coefficients:\n")
+summary(pitcher_type_models[[example_pitcher]])
+
+cat("\n\nConfusion Matrix:\n")
+print(type_model_evaluations[[example_pitcher]]$confusion_matrix)
+
+# ZONE MODEL
+cat("\n\n========== ZONE MODEL ==========\n")
+cat("Model Coefficients:\n")
+summary(pitcher_zone_models[[example_pitcher]])
+
+cat("\n\nConfusion Matrix:\n")
+print(zone_model_evaluations[[example_pitcher]]$confusion_matrix)
+
+# Get predictions with probabilities
+example_data <- pitch_data_features %>%
+  filter(player_name == example_pitcher)
+
+type_predicted_probs <- predict(pitcher_type_models[[example_pitcher]], 
+                                newdata = example_data, 
+                                type = "probs")
+
+zone_predicted_probs <- predict(pitcher_zone_models[[example_pitcher]], 
+                                newdata = example_data, 
+                                type = "probs")
+
+# Show first few predictions with probabilities
+cat("\n\nExample Predictions (first 5 pitches):\n")
+cat("\nPITCH TYPE probabilities:\n")
+print(type_predicted_probs[1:5, ])
+cat("\nZONE probabilities:\n")
+print(zone_predicted_probs[1:5, ])
+```
+
+## Predict Next Pitch Type AND Zone for New Sequence
+
+```{r predict-function}
+# Function to predict next pitch TYPE AND ZONE given previous sequence
+predict_next_pitch <- function(pitcher_name, prev_pitch_1, prev_zone_1, 
+                                prev_pitch_2 = NA, prev_zone_2 = NA,
+                                balls, strikes, stand) {
+  
+  # Check if models exist
+  has_type_model <- pitcher_name %in% names(pitcher_type_models)
+  has_zone_model <- pitcher_name %in% names(pitcher_zone_models)
+  
+  if (!has_type_model && !has_zone_model) {
+    return("No models available for this pitcher")
+  }
+  
+  # Create new data frame for prediction
+  new_data <- data.frame(
+    prev_pitch_type_1 = factor(prev_pitch_1, levels = levels(pitch_data_features$prev_pitch_type_1)),
+    prev_zone_1 = factor(prev_zone_1, levels = levels(pitch_data_features$prev_zone_1)),
+    prev_pitch_type_2 = factor(prev_pitch_2, levels = levels(pitch_data_features$prev_pitch_type_2)),
+    prev_zone_2 = factor(prev_zone_2, levels = levels(pitch_data_features$prev_zone_2)),
+    balls = factor(balls, levels = levels(pitch_data_features$balls)),
+    strikes = factor(strikes, levels = levels(pitch_data_features$strikes)),
+    stand = factor(stand, levels = levels(pitch_data_features$stand))
+  )
+  
+  result <- list()
+  
+  # Predict pitch type
+  if (has_type_model) {
+    tryCatch({
+      predicted_type <- predict(pitcher_type_models[[pitcher_name]], newdata = new_data, type = "class")
+      type_probs <- predict(pitcher_type_models[[pitcher_name]], newdata = new_data, type = "probs")
+      
+      result$predicted_pitch_type <- as.character(predicted_type)
+      result$type_probabilities <- type_probs
+    }, error = function(e) {
+      result$predicted_pitch_type <- paste("Error:", e$message)
+      result$type_probabilities <- NULL
+    })
+  } else {
+    result$predicted_pitch_type <- "No type model available"
+    result$type_probabilities <- NULL
+  }
+  
+  # Predict zone
+  if (has_zone_model) {
+    tryCatch({
+      predicted_zone <- predict(pitcher_zone_models[[pitcher_name]], newdata = new_data, type = "class")
+      zone_probs <- predict(pitcher_zone_models[[pitcher_name]], newdata = new_data, type = "probs")
+      
+      result$predicted_zone <- as.character(predicted_zone)
+      result$zone_probabilities <- zone_probs
+    }, error = function(e) {
+      result$predicted_zone <- paste("Error:", e$message)
+      result$zone_probabilities <- NULL
+    })
+  } else {
+    result$predicted_zone <- "No zone model available"
+    result$zone_probabilities <- NULL
+  }
+  
+  return(result)
+}
+
+# Example prediction
+example_prediction <- predict_next_pitch(
+  pitcher_name = example_pitcher,
+  prev_pitch_1 = "FF",  # Previous pitch was a fastball
+  prev_zone_1 = "2",    # In zone 2
+  prev_pitch_2 = "CH",  # Two pitches ago was a changeup
+  prev_zone_2 = "8",    # In zone 8
+  balls = 1,
+  strikes = 1,
+  stand = "R"           # Right-handed batter
+)
+
+cat("\n\nExample Prediction:\n")
+cat("Predicted pitch type:", example_prediction$predicted_pitch_type, "\n")
+cat("Predicted zone:", example_prediction$predicted_zone, "\n\n")
+cat("Type probabilities:\n")
+print(example_prediction$type_probabilities)
+cat("\nZone probabilities:\n")
+print(example_prediction$zone_probabilities)
+```
+
+## Visualize Results
+
+```{r visualizations}
+# Plot PITCH TYPE accuracy distribution
+ggplot(combined_accuracy_summary, aes(x = reorder(pitcher, type_accuracy), y = type_accuracy)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Pitch Type Model Accuracy by Pitcher",
+       x = "Pitcher",
+       y = "Accuracy") +
+  theme_minimal() +
+  geom_hline(yintercept = mean(combined_accuracy_summary$type_accuracy, na.rm = TRUE), 
+             linetype = "dashed", color = "red") +
+  annotate("text", x = 1, y = mean(combined_accuracy_summary$type_accuracy, na.rm = TRUE) + 0.02,
+           label = paste0("Mean: ", round(mean(combined_accuracy_summary$type_accuracy, na.rm = TRUE), 3)),
+           color = "red")
+
+# Plot ZONE accuracy distribution
+ggplot(combined_accuracy_summary, aes(x = reorder(pitcher, zone_accuracy), y = zone_accuracy)) +
+  geom_bar(stat = "identity", fill = "darkgreen") +
+  coord_flip() +
+  labs(title = "Zone Model Accuracy by Pitcher",
+       x = "Pitcher",
+       y = "Accuracy") +
+  theme_minimal() +
+  geom_hline(yintercept = mean(combined_accuracy_summary$zone_accuracy, na.rm = TRUE), 
+             linetype = "dashed", color = "red") +
+  annotate("text", x = 1, y = mean(combined_accuracy_summary$zone_accuracy, na.rm = TRUE) + 0.02,
+           label = paste0("Mean: ", round(mean(combined_accuracy_summary$zone_accuracy, na.rm = TRUE), 3)),
+           color = "red")
+
+# Compare type vs zone accuracy
+ggplot(combined_accuracy_summary, aes(x = type_accuracy, y = zone_accuracy)) +
+  geom_point(size = 3, alpha = 0.6, color = "purple") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Pitch Type Accuracy vs. Zone Accuracy",
+       x = "Pitch Type Accuracy",
+       y = "Zone Accuracy") +
+  theme_minimal()
+
+# Compare to baseline (most common pitch and zone)
+baseline_accuracy <- pitch_data_features %>%
+  group_by(player_name) %>%
+  summarise(
+    most_common_pitch = names(which.max(table(pitch_type))),
+    baseline_type_accuracy = max(table(pitch_type)) / n(),
+    most_common_zone = names(which.max(table(zone))),
+    baseline_zone_accuracy = max(table(zone)) / n()
+  )
+
+comparison <- combined_accuracy_summary %>%
+  left_join(baseline_accuracy, by = c("pitcher" = "player_name")) %>%
+  mutate(
+    type_improvement = type_accuracy - baseline_type_accuracy,
+    zone_improvement = zone_accuracy - baseline_zone_accuracy
+  )
+
+# Type model vs baseline
+ggplot(comparison, aes(x = baseline_type_accuracy, y = type_accuracy)) +
+  geom_point(size = 3, alpha = 0.6, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Pitch Type Model Accuracy vs. Baseline",
+       x = "Baseline Accuracy",
+       y = "Model Accuracy") +
+  theme_minimal()
+
+# Zone model vs baseline
+ggplot(comparison, aes(x = baseline_zone_accuracy, y = zone_accuracy)) +
+  geom_point(size = 3, alpha = 0.6, color = "darkgreen") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Zone Model Accuracy vs. Baseline",
+       x = "Baseline Accuracy",
+       y = "Model Accuracy") +
+  theme_minimal()
+```
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```
+

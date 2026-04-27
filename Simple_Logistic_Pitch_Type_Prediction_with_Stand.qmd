@@ -1,0 +1,354 @@
+---
+title: "Simple Pitch Type Prediction with Stand"
+author: "Brian Bruxvoort"
+format: pdf
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Load Required Libraries
+
+```{r libraries}
+library(tidyverse)
+library(nnet)  # For multinomial logistic regression
+library(caret) # For confusion matrix and model evaluation
+```
+
+## Load Data
+
+```{r load-data}
+pitch_data <- read.csv("~/Truman_PDAT_630/Thesis_Project/pitch_data.csv")
+```
+
+## Data Preparation - Simple Model (with Batter Handedness)
+
+```{r prepare-simple-data}
+# Select only needed columns (now including stand)
+selected_columns <- c(
+  "pitch_type", "player_name", "at_bat_number", "pitch_number", "stand"
+)
+
+pitch_data_clean <- pitch_data[, selected_columns]
+
+# Sort data by pitcher, at-bat, and pitch number to ensure correct sequence
+pitch_data_sorted <- pitch_data_clean %>%
+  arrange(player_name, at_bat_number, pitch_number)
+
+# Create lagged features for each at-bat
+pitch_data_simple <- pitch_data_sorted %>%
+  group_by(player_name, at_bat_number) %>%
+  mutate(
+    # Previous pitch type (lag 1)
+    prev_pitch_type_1 = lag(pitch_type, 1),
+    
+    # Previous pitch type (lag 2)
+    prev_pitch_type_2 = lag(pitch_type, 2)
+  ) %>%
+  ungroup() %>%
+  # Remove first pitch of each at-bat (no previous pitch to predict from)
+  filter(!is.na(prev_pitch_type_1)) %>%
+  # Convert categorical variables to factors
+  mutate(
+    pitch_type = as.factor(pitch_type),
+    prev_pitch_type_1 = as.factor(prev_pitch_type_1),
+    prev_pitch_type_2 = as.factor(prev_pitch_type_2),
+    stand = as.factor(stand)
+  )
+
+# Check the prepared data
+head(pitch_data_simple)
+cat("\nTotal pitches in dataset:", nrow(pitch_data_simple), "\n")
+```
+
+## Explore Data for Model Building
+
+```{r explore-simple-data}
+# Check number of pitches per pitcher
+pitcher_counts <- pitch_data_simple %>%
+  group_by(player_name) %>%
+  summarise(
+    n_pitches = n(),
+    n_pitch_types = n_distinct(pitch_type)
+  ) %>%
+  arrange(desc(n_pitches))
+
+print(pitcher_counts)
+
+# Filter pitchers with sufficient data (at least 50 pitches)
+pitchers_sufficient_data <- pitcher_counts %>%
+  filter(n_pitches >= 50) %>%
+  pull(player_name)
+
+cat("\nNumber of pitchers with sufficient data:", length(pitchers_sufficient_data), "\n")
+```
+
+## Build Simple Multinomial Logistic Regression Models
+
+```{r build-simple-models}
+# # Function to build simple model for a single pitcher
+# build_simple_pitcher_model <- function(pitcher_data) {
+#   tryCatch({
+#     # Build multinomial logistic regression model
+#     # Using only previous 2 pitch types, pitch number, and batter handedness
+#     model <- multinom(
+#       pitch_type ~ prev_pitch_type_1 + prev_pitch_type_2 + pitch_number + stand,
+#       data = pitcher_data,
+#       maxit = 500,
+#       trace = FALSE
+#     )
+#     return(model)
+#   }, error = function(e) {
+#     return(NULL)
+#   })
+# }
+# 
+# # Build models for each pitcher
+# pitcher_simple_models <- list()
+# 
+# for (pitcher in pitchers_sufficient_data) {
+#   cat("\nBuilding simple model for:", pitcher)
+#   
+#   pitcher_data <- pitch_data_simple %>%
+#     filter(player_name == pitcher)
+#   
+#   model <- build_simple_pitcher_model(pitcher_data)
+#   
+#   if (!is.null(model)) {
+#     pitcher_simple_models[[pitcher]] <- model
+#     cat(" - Success")
+#   } else {
+#     cat(" - Failed")
+#   }
+# }
+# 
+# cat("\n\nTotal simple models built:", length(pitcher_simple_models), "\n")
+```
+
+## Evaluate Simple Model Performance
+
+```{r evaluate-simple-models}
+# Function to evaluate a pitcher's simple model
+evaluate_simple_pitcher_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    # Make predictions
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+    
+    # Calculate accuracy
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type), na.rm = TRUE)
+    
+    # Create confusion matrix
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type)
+      
+      # Get common levels
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+      
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) {
+      NULL
+    })
+    
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+# Evaluate all simple models
+simple_model_evaluations <- list()
+
+for (pitcher in names(pitcher_simple_models)) {
+  pitcher_data <- pitch_data_simple %>%
+    filter(player_name == pitcher)
+  
+  eval <- evaluate_simple_pitcher_model(pitcher, pitcher_simple_models[[pitcher]], pitcher_data)
+  simple_model_evaluations[[pitcher]] <- eval
+}
+
+# Summary of simple model accuracies
+simple_accuracy_summary <- data.frame(
+  pitcher = names(simple_model_evaluations),
+  accuracy = sapply(simple_model_evaluations, function(x) x$accuracy),
+  error = sapply(simple_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })
+) %>%
+  arrange(desc(accuracy))
+
+print(simple_accuracy_summary)
+
+# Statistics
+cat("\n\nSimple Model Statistics:\n")
+cat("Models with errors:", sum(!is.na(simple_accuracy_summary$error)), "\n")
+cat("Models successful:", sum(is.na(simple_accuracy_summary$error) & !is.na(simple_accuracy_summary$accuracy)), "\n")
+cat("Mean accuracy:", round(mean(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Median accuracy:", round(median(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Min accuracy:", round(min(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Max accuracy:", round(max(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+```
+
+## Save Simple Models
+
+```{r save-simple-models}
+# # Save the simple models and data for the Shiny app
+# cat("\n\nSaving simple models and data...\n")
+# saveRDS(pitcher_simple_models, file = "pitcher_models_simple_stand.rds")
+# saveRDS(pitch_data_simple, file = "pitch_data_features_simple_stand.rds")
+# saveRDS(simple_model_evaluations, file = "model_evaluations_simple_stand.rds")
+# 
+# cat("Models saved successfully!\n")
+# cat("Files created:\n")
+# cat("  - pitcher_models_simple_stand.rds\n")
+# cat("  - pitch_data_features_simple_stand.rds\n")
+# cat("  - model_evaluations_simple_stand.rds\n")
+```
+
+## Example: Detailed Results for One Pitcher
+
+```{r example-simple-pitcher}
+# Select the first pitcher with a model
+example_pitcher <- names(pitcher_simple_models)[1]
+
+cat("Detailed results for:", example_pitcher, "\n\n")
+
+# Show model summary
+cat("Model Coefficients:\n")
+summary(pitcher_simple_models[[example_pitcher]])
+
+# Show confusion matrix
+cat("\n\nConfusion Matrix:\n")
+print(simple_model_evaluations[[example_pitcher]]$confusion_matrix)
+
+# Get predictions with probabilities
+example_data <- pitch_data_simple %>%
+  filter(player_name == example_pitcher)
+
+predicted_probs <- predict(pitcher_simple_models[[example_pitcher]], 
+                           newdata = example_data, 
+                           type = "probs")
+
+# Show first few predictions with probabilities
+cat("\n\nExample Predictions (first 5 pitches):\n")
+results_df <- cbind(
+  example_data[1:5, c("prev_pitch_type_1", "prev_pitch_type_2", "pitch_number", "stand", "pitch_type")],
+  predicted_probs[1:5, ]
+)
+print(results_df)
+```
+
+## Predict Next Pitch for New Sequence (Simple Model)
+
+```{r predict-simple-function}
+# Function to predict next pitch given previous sequence (simple version)
+predict_next_pitch_simple <- function(pitcher_name, prev_pitch_1, 
+                                      prev_pitch_2 = NA, pitch_number, stand) {
+  
+  if (!pitcher_name %in% names(pitcher_simple_models)) {
+    return("No model available for this pitcher")
+  }
+  
+  # Create new data frame for prediction
+  new_data <- data.frame(
+    prev_pitch_type_1 = factor(prev_pitch_1, levels = levels(pitch_data_simple$prev_pitch_type_1)),
+    prev_pitch_type_2 = factor(prev_pitch_2, levels = levels(pitch_data_simple$prev_pitch_type_2)),
+    pitch_number = pitch_number,
+    stand = factor(stand, levels = levels(pitch_data_simple$stand))
+  )
+  
+  # Get predictions
+  predicted_class <- predict(pitcher_simple_models[[pitcher_name]], newdata = new_data, type = "class")
+  predicted_probs <- predict(pitcher_simple_models[[pitcher_name]], newdata = new_data, type = "probs")
+  
+  # Return results
+  return(list(
+    predicted_pitch = as.character(predicted_class),
+    probabilities = predicted_probs
+  ))
+}
+
+# Example prediction
+example_prediction <- predict_next_pitch_simple(
+  pitcher_name = example_pitcher,
+  prev_pitch_1 = "FF",      # Previous pitch was a fastball
+  prev_pitch_2 = "SL",      # Two pitches ago was a slider
+  pitch_number = 3,         # This will be the 3rd pitch
+  stand = "R"               # Right-handed batter
+)
+
+cat("\n\nExample Simple Prediction:\n")
+cat("Predicted next pitch:", example_prediction$predicted_pitch, "\n")
+cat("Probabilities:\n")
+print(example_prediction$probabilities)
+```
+
+## Visualize Simple Model Results
+
+```{r visualize-simple}
+# Plot accuracy distribution for simple model
+ggplot(simple_accuracy_summary, aes(x = reorder(pitcher, accuracy), y = accuracy)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Simple Model Accuracy by Pitcher",
+       subtitle = "Using previous 2 pitch types, pitch number, and batter handedness",
+       x = "Pitcher",
+       y = "Accuracy") +
+  theme_minimal() +
+  geom_hline(yintercept = mean(simple_accuracy_summary$accuracy, na.rm = TRUE), 
+             linetype = "dashed", color = "red") +
+  annotate("text", x = 1, y = mean(simple_accuracy_summary$accuracy, na.rm = TRUE) + 0.02,
+           label = paste0("Mean: ", round(mean(simple_accuracy_summary$accuracy, na.rm = TRUE), 3)),
+           color = "red")
+
+# Compare to baseline (most common pitch)
+baseline_accuracy_simple <- pitch_data_simple %>%
+  group_by(player_name) %>%
+  summarise(
+    most_common_pitch = names(which.max(table(pitch_type))),
+    baseline_accuracy = max(table(pitch_type)) / n()
+  )
+
+comparison_simple <- simple_accuracy_summary %>%
+  left_join(baseline_accuracy_simple, by = c("pitcher" = "player_name")) %>%
+  mutate(improvement = accuracy - baseline_accuracy)
+
+ggplot(comparison_simple, aes(x = baseline_accuracy, y = accuracy)) +
+  geom_point(size = 3, alpha = 0.6, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Simple Model Accuracy vs. Baseline (Most Common Pitch)",
+       subtitle = "Points above line indicate model improvement over baseline",
+       x = "Baseline Accuracy",
+       y = "Simple Model Accuracy") +
+  theme_minimal()
+
+# Histogram of accuracies
+ggplot(simple_accuracy_summary, aes(x = accuracy)) +
+  geom_histogram(bins = 20, fill = "steelblue", alpha = 0.7, color = "black") +
+  geom_vline(xintercept = mean(simple_accuracy_summary$accuracy, na.rm = TRUE), 
+             linetype = "dashed", color = "red", size = 1) +
+  labs(title = "Distribution of Simple Model Accuracies",
+       x = "Accuracy",
+       y = "Count") +
+  theme_minimal()
+```
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```

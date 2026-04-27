@@ -1,0 +1,936 @@
+---
+title: "Predicting Pitch Sequences in Baseball Using Multinomial Logistic Regression"
+author: "Brian Bruxvoort"
+date: "Spring 2026"
+institute: "Truman State University"
+format:
+  beamer:
+    theme: Madrid
+    colortheme: beaver
+    fonttheme: structurebold
+    navigation: horizontal
+    slide-level: 2
+    toc: false
+    keep-tex: true
+    header-includes: |
+      \usepackage{booktabs}
+      \usepackage{graphicx}
+      \usepackage{xcolor}
+      \definecolor{truman}{RGB}{64,0,128}
+      \setbeamercolor{frametitle}{bg=truman, fg=white}
+      \setbeamercolor{title}{fg=truman}
+      \setbeamercolor{block title}{bg=truman, fg=white}
+      \setbeamertemplate{footline}[frame number]
+      \setbeamertemplate{navigation symbols}{}
+bibliography: references.bib
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center")
+
+library(tidyverse)
+library(nnet)
+library(caret)
+library(knitr)
+
+pitch_data1     <- read.csv("pitch_data.csv")
+pitcher_models  <- readRDS("pitcher_models_basic.rds")
+pitch_data_features <- readRDS("pitch_data_features_basic.rds")
+model_evaluations   <- readRDS("model_evaluations_basic.rds")
+model1_evals <- readRDS("model_evaluations_simple.rds")
+model2_evals <- readRDS("model_evaluations_simple_stand.rds")
+model3_evals <- readRDS("model_evaluations_basic.rds")
+model4_type_evals <- readRDS("type_model_evaluations_separate.rds")
+model4_zone_evals <- readRDS("zone_model_evaluations_separate.rds")
+model5_evals <- readRDS("interaction_model_evaluations.rds")
+
+selected_columns <- c("pitch_type", "player_name", "zone", "stand", "balls", "strikes", "at_bat_number", "pitch_number", "n_thruorder_pitcher")
+pitch_data <- pitch_data1[, selected_columns]
+
+extract_accuracy <- function(eval_list, model_name, model_type = "Combined") {
+  if (is.data.frame(eval_list)) {
+    return(eval_list %>% mutate(model = model_name, model_type = model_type))
+  }
+  data.frame(
+    pitcher  = names(eval_list),
+    accuracy = sapply(eval_list, function(x) {
+      if (is.list(x)) {
+        if ("combined_accuracy" %in% names(x)) return(x$combined_accuracy)
+        if ("accuracy"          %in% names(x)) return(x$accuracy)
+        return(NA)
+      } else if (is.numeric(x)) return(x) else return(NA)
+    }),
+    stringsAsFactors = FALSE
+  ) %>%
+    mutate(model = model_name, model_type = model_type) %>%
+    select(model, model_type, pitcher, accuracy)
+}
+
+model1_accuracy <- extract_accuracy(model1_evals, "Model 1: Simple")
+model2_accuracy <- extract_accuracy(model2_evals, "Model 2: Simple + Stand")
+model3_accuracy <- extract_accuracy(model3_evals, "Model 3: Basic")
+model4_type_accuracy <- extract_accuracy(model4_type_evals, "Model 4: Separate", "Type Only")
+model4_zone_accuracy <- extract_accuracy(model4_zone_evals, "Model 4: Separate", "Zone Only")
+model5_accuracy <- extract_accuracy(model5_evals, "Model 5: Interaction")
+
+all_accuracies <- bind_rows(
+  model1_accuracy, model2_accuracy, model3_accuracy,
+  model4_type_accuracy, model4_zone_accuracy, model5_accuracy)
+
+model4_approx_combined <- all_accuracies %>%
+  filter(model == "Model 4: Separate") %>%
+  select(pitcher, model_type, accuracy) %>%
+  pivot_wider(names_from = model_type, values_from = accuracy) %>%
+  mutate(
+    accuracy   = `Type Only` * `Zone Only`,
+    model      = "Model 4: Separate",
+    model_type = "Combined (Approximated)") %>%
+  select(model, model_type, pitcher, accuracy)
+
+all_accuracies <- bind_rows(all_accuracies, model4_approx_combined)
+
+accuracies_filtered <- all_accuracies %>%
+  filter(!(model == "Model 4: Separate" & model_type %in% c("Type Only", "Zone Only")))
+
+pitcher_pitch_counts <- pitch_data1 %>%
+  count(player_name, name = "total_pitches")
+
+pitcher_performance <- all_accuracies %>%
+  filter(model_type == "Combined") %>%
+  group_by(pitcher) %>%
+  summarise(
+    n_models       = n(),
+    mean_accuracy  = mean(accuracy, na.rm = TRUE),
+    sd_accuracy    = sd(accuracy,   na.rm = TRUE),
+    min_accuracy   = min(accuracy,  na.rm = TRUE),
+    max_accuracy   = max(accuracy,  na.rm = TRUE),
+    range_accuracy = max_accuracy - min_accuracy,
+    .groups = "drop") %>%
+  left_join(pitcher_pitch_counts, by = c("pitcher" = "player_name")) %>%
+  arrange(desc(mean_accuracy))
+```
+
+# \color{truman}PART 1: NON-TECHNICAL {.plain}
+
+## The Battle: Pitcher vs. Hitter
+
+\begin{columns}
+\begin{column}{0.55\textwidth}
+\textbf{Every pitch is a decision:}
+\begin{itemize}
+  \item What type of pitch to throw?
+  \item Where to throw it?
+  \item What did I just throw? What's the count?
+\end{itemize}
+
+\vspace{0.4cm}
+\textbf{Why does it matter?}
+\begin{itemize}
+  \item A 95 mph fastball reaches home plate in \textbf{\textasciitilde400 milliseconds}
+  \item Knowing what's coming = precious extra reaction time
+  \item The ability to anticipate a pitch can shift the competitive balance
+\end{itemize}
+\end{column}
+\begin{column}{0.42\textwidth}
+\begin{block}{The Core Question}
+\centering
+\textit{"What pitch will the pitcher throw next?"}
+\end{block}
+\vspace{0.3cm}
+People have tried to answer this for a long time. From reading hand signals to high-tech scanning systems
+\end{column}
+\end{columns}
+
+## Baseball Has a Memory
+
+:::::: {.columns}
+::: {.column width="55%"}
+\textbf{MLB's Statcast system tracks everything:}
+\begin{itemize}
+  \item Every pitch in every game, all season long
+  \item \textbf{712,528 pitches} recorded in 2025
+  \item Velocity, spin, location, outcome were all captured
+\end{itemize}
+
+\vspace{0.2cm}
+\textbf{Pitchers have habits:}
+\begin{itemize}
+  \item After a fastball, what comes next?
+  \item Does the count change behavior?
+  \item Does the batter's handedness matter?
+\end{itemize}
+
+\vspace{0.2cm}
+\textit{Just like people have habits in daily life, pitchers develop tendencies over thousands of pitches.}
+:::
+::: {.column width="44%"}
+```{r fig.height=3.2, fig.width=3.2}
+pitch_type_summary <- pitch_data %>%
+  count(pitch_type) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  arrange(desc(n))
+
+ggplot(pitch_type_summary, aes(x = reorder(pitch_type, -n), y = n, fill = pitch_type)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(title = "Pitches Thrown in 2025", x = "Pitch Type", y = "Count") +
+  theme_minimal(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+:::
+::::::
+
+## The Approach: Building a Prediction Model
+
+\begin{columns}
+\begin{column}{0.6\textwidth}
+\textbf{Inputs to the model:}
+\begin{itemize}
+  \item What were the last 1-2 pitches thrown?
+  \item What is the current count (balls \& strikes)?
+  \item Does the batter bat left- or right-handed?
+\end{itemize}
+
+\vspace{0.2cm}
+\textbf{Output:}
+\begin{itemize}
+  \item A probability for each pitch type
+  \item e.g., \textit{"40\% fastball, 35\% slider, 25\% changeup"}
+  \item The model picks the \textbf{most likely} one as its prediction
+\end{itemize}
+
+\vspace{0.2cm}
+\textbf{Key design choice:} I built a \textit{separate} model for each of the 767 pitchers in 2025 - not one generic model
+\end{column}
+\begin{column}{0.4\textwidth}
+\begin{block}{How to think about it}
+\centering
+\vspace{0.2cm}
+\textbf{Situation} \\
+(count, last pitch, batter side)
+
+\vspace{0.15cm}
+$\Downarrow$
+
+\vspace{0.15cm}
+\textbf{Model learns pitcher's habits}
+
+\vspace{0.15cm}
+$\Downarrow$
+
+\vspace{0.15cm}
+\textbf{Predicted next pitch} \\
+\textbf{probability}
+\vspace{0.2cm}
+\end{block}
+\end{column}
+\end{columns}
+
+## What Did I Find?
+
+:::::: {.columns}
+::: {.column width="55%"}
+\textbf{Prediction Accuracy:}
+\begin{itemize}
+  \item \textbf{62\%} correct predictions vs a 32\% random-guess baseline
+  \item That's roughly \textbf{double} what you'd expect by chance
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Key finding \#1:}
+
+Relief pitchers (closers, setup men) are typically \textbf{more predictable} than starting pitchers
+
+\vspace{0.3cm}
+\textbf{Key finding \#2:}
+
+The \textbf{count} (balls \& strikes) is one of the biggest drivers of what pitch comes next
+
+\vspace{0.3cm}
+\textbf{Key finding \#3:}
+
+Model complexity can backfire as more isn't always better
+:::
+::: {.column width="44%"}
+```{r fig.height=3.5, fig.width=3.5}
+overall_model_stats <- accuracies_filtered %>%
+  mutate(model_combined = ifelse(
+    model == "Model 4: Separate",
+    paste(model, "-", model_type), model)) %>%
+  filter(!model_combined %in% c(
+    "Model 4: Separate - Type Only",
+    "Model 4: Separate - Zone Only")) %>%
+  group_by(model_combined) %>%
+  summarise(mean_accuracy = mean(accuracy, na.rm = TRUE), .groups = "drop") %>%
+  arrange(mean_accuracy)
+
+ggplot(overall_model_stats,
+       aes(x = reorder(model_combined, mean_accuracy), y = mean_accuracy)) +
+  geom_col(fill = "purple", alpha = 0.85) +
+  geom_hline(yintercept = 0.32, linetype = "dashed", color = "red", size = 0.7) +
+  annotate("text", x = 0.6, y = 0.34, label = "Baseline\n(32%)", size = 2.5, color = "red") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Accuracy by Model", x = NULL, y = "Mean Accuracy") +
+  theme_minimal(base_size = 8)
+```
+:::
+::::::
+
+## The App: Prediction in Real Time
+
+\begin{columns}
+\begin{column}{0.52\textwidth}
+\textbf{The Shiny App puts the model to work:}
+\begin{itemize}
+  \item Select any 2025 MLB pitcher
+  \item Enter the game situation (count, last pitch, batter side)
+  \item Get probabilities for every pitch type
+\end{itemize}
+
+\vspace{0.2cm}
+\textbf{What the app shows you:}
+\begin{itemize}
+  \item Predicted pitch type and confidence level
+  \item Full probability breakdown for all pitch types
+  \item How accurate the model is for that specific pitcher
+\end{itemize}
+\end{column}
+\begin{column}{0.45\textwidth}
+\begin{block}{App Demo}
+\centering
+\vspace{0.3cm}
+Watch a \textbf{live video} of a pitcher and follow along pitch-by-pitch using the app.
+\vspace{0.3cm}
+\end{block}
+\vspace{0.3cm}
+\begin{block}{Practical Uses}
+\begin{itemize}
+  \item Pre-game scouting reports
+  \item Hitter preparation
+  \item Pitcher self-assessment
+\end{itemize}
+\end{block}
+\vspace{0.2cm}
+\textbf{Access the app:}\\
+\footnotesize\url{https://b-bruxvoort.shinyapps.io/pitch_type_prediction_app/}
+\end{column}
+\end{columns}
+
+## App Cheat Sheet: Zones & Pitch Types
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\begin{center}
+\includegraphics[width=0.85\textwidth]{pitch_zones.png}
+
+\vspace{0.1cm}
+{\footnotesize \textit{Catcher/umpire's point of view}}
+\end{center}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Pitch Type Abbreviations:}
+
+\vspace{0.2cm}
+{\footnotesize
+\begin{tabular}{ll}
+\textbf{CH} & Changeup \\
+\textbf{CU} & Curveball \\
+\textbf{FC} & Cutter \\
+\textbf{EP} & Eephus \\
+\textbf{FF} & Four-Seam Fastball \\
+\textbf{FO} & Forkball \\
+\textbf{KN} & Knuckleball \\
+\textbf{KC} & Knuckle-curve \\
+\textbf{SC} & Screwball \\
+\textbf{SI} & Sinker \\
+\textbf{SL} & Slider \\
+\textbf{SV} & Slurve \\
+\textbf{FS} & Splitter \\
+\textbf{ST} & Sweeper \\
+\end{tabular}
+}
+\end{column}
+\end{columns}
+
+## Questions
+
+\begin{center}
+\vspace{0.5cm}
+{\Large\color{truman}\textbf{Questions?}}
+
+\vspace{0.6cm}
+{\large Part 1 — General Overview}
+
+\vspace{0.8cm}
+\begin{block}{}
+\centering
+Thank you for your time and interest.\\[0.2cm]
+\textit{We will now transition into the technical presentation.}
+\end{block}
+\end{center}
+
+# \color{truman}PART 2: TECHNICAL DEEP DIVE {.plain}
+
+## Research Objectives
+
+\textbf{Four core contributions:}
+
+\begin{enumerate}
+  \item \textbf{Systematic model comparison} — Five multinomial logistic regression specifications of increasing complexity, evaluated against one another with formal statistical tests
+  \item \textbf{Pitcher-specific models} — 767 individual models rather than a single league-wide model, capturing individual pitching tendencies
+  \item \textbf{Practical variable restriction} — Only variables observable in real time during a live game; no spin axis, release height, or trajectory features
+  \item \textbf{Interpretability emphasis} — Logistic regression over black-box alternatives, with coefficient interpretability as a design priority
+\end{enumerate}
+
+\vspace{0.3cm}
+\begin{block}{Guiding question}
+Can classical statistical methods effectively model sequential pitch selection while remaining implementable in real-world game contexts?
+\end{block}
+
+## Data: Statcast 2025
+
+:::::: {.columns}
+::: {.column width="55%"}
+\textbf{Source:} MLB BaseballSavant
+
+\textbf{Scope:} 2025 regular season, all 30 teams
+
+\textbf{Scale:} \textbf{712,528} pitch observations, 118 raw variables
+
+\vspace{0.1cm}
+\textbf{Variables retained:}
+\begin{itemize}
+  \item \texttt{pitch\_type} — outcome variable (14 types)
+  \item \texttt{zone} — pitch location (14 zones)
+  \item \texttt{stand} — batter handedness (L/R)
+  \item \texttt{balls}, \texttt{strikes} — count state
+  \item \texttt{at\_bat\_number}, \texttt{pitch\_number}, \texttt{player\_name}
+\end{itemize}
+
+\vspace{0.1cm}
+\textbf{Why not spin rate, velocity, pfx?}
+
+\footnotesize Multicollinearity, not real-time observable, overfitting risk
+:::
+::: {.column width="42%"}
+```{r fig.height=3.8, fig.width=3.5}
+stand_summary <- pitch_data %>%
+  count(stand) %>%
+  mutate(percentage = n / sum(n) * 100,
+         stand_label = case_when(
+           stand == "R" ~ "Right-Handed",
+           stand == "L" ~ "Left-Handed",
+           TRUE ~ as.character(stand))) %>% arrange(desc(n))
+
+ggplot(stand_summary, aes(x = "", y = n, fill = stand_label)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(stand_label, "\n", n, "\n(", round(percentage, 1), "%)")), position = position_stack(vjust = 0.5), size = 5, fontface = "bold") +
+  scale_fill_manual(values = c("Left-Handed" = "#2E86AB", "Right-Handed" = "#A23B72")) +
+  labs(title = "Batter Handedness\nDistribution") +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", size = 12, hjust = 0.5), legend.position = "none")
+```
+:::
+::::::
+
+## Exploratory Data Analysis: Count Distribution
+```{r fig.height=2.8, fig.width=4.5}
+pitch_data %>%
+  count(balls, strikes) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = factor(strikes), y = factor(balls), fill = n)) +
+  geom_tile(color = "white", size = 0.8) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")),
+            color = "white", size = 3.5, fontface = "bold") +
+  scale_fill_gradient(low = "#3B4CC0", high = "#B40426") +
+  labs(title = "Count Distribution", x = "Strikes", y = "Balls") +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "none", panel.grid = element_blank())
+```
+
+\footnotesize \textbf{Key takeaway:} 0-0 count = 25.7\% of all pitches. Every PA starts here, making it the single most common game state.
+
+## Exploratory Data Analysis: Pitch Sequences
+```{r fig.height=3.8, fig.width=7, out.width="100%"}
+pitch_sequences <- pitch_data1 %>%
+  arrange(pitcher, game_date, at_bat_number, pitch_number) %>%
+  group_by(pitcher, game_date, at_bat_number) %>%
+  mutate(prev_pitch = lag(pitch_type)) %>%
+  ungroup() %>%
+  filter(!is.na(prev_pitch)) %>%
+  count(prev_pitch, pitch_type) %>%
+  group_by(prev_pitch) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ungroup()
+
+top_sequences <- pitch_sequences %>%
+  arrange(desc(n)) %>%
+  head(15) %>%
+  mutate(sequence = paste(prev_pitch, "->", pitch_type))
+
+ggplot(top_sequences, aes(x = reorder(sequence, n), y = n, fill = sequence)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  geom_text(aes(label = paste0(n, " (", round(percentage, 1), "%)")),
+            hjust = -0.1, size = 2.8) +
+  coord_flip() +
+  labs(title = "Top 15 Most Common Pitch Sequences",
+       x = "Pitch Sequence", y = "Count") +
+  theme_minimal(base_size = 9) +
+  theme(plot.title = element_text(face = "bold", size = 10)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+```
+
+\footnotesize \textbf{Key takeaway:} FF$\rightarrow$FF occurs 43.1\% of the time after a fastball as pitchers repeat their primary pitch most of the time.
+
+## Methodological Framework
+
+\textbf{Why Multinomial Logistic Regression?}
+
+For an outcome $Y_i \in \{1, \ldots, J\}$ (pitch types), the softmax formulation:
+
+$$P(Y_i = j \mid \mathbf{X}_i) = \frac{\exp(\mathbf{X}_i \boldsymbol{\beta}_j)}{\sum_{k=1}^{J} \exp(\mathbf{X}_i \boldsymbol{\beta}_k)}$$
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{Advantages:}
+\begin{itemize}
+  \item Natural fit for unordered categorical outcomes
+  \item Coefficients interpretable as log-odds ratios
+  \item Computationally efficient at scale
+  \item Probabilities guaranteed to sum to 1
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Why not tree-based / neural methods?}
+\begin{itemize}
+  \item Random forest and XGBoost tested but had no meaningful accuracy gain for computational power needed
+  \item Pitch selection is approximately linear in observable game state
+  \item Logistic regression is faster, interpretable, and deployable
+\end{itemize}
+\end{column}
+\end{columns}
+
+## The Key Addition: Lagged Variables
+
+\textbf{Pitch selection is inherently sequential.} Pitchers "set up" batters across multiple pitches.
+
+\begin{columns}
+\begin{column}{0.5\textwidth}
+\small\textbf{Lagged features created:}
+\begin{itemize}
+  \setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}\small
+  \item \texttt{lag1\_pitch\_type} — previous pitch type
+  \item \texttt{lag2\_pitch\_type} — two pitches ago
+  \item \texttt{lag1\_zone} — previous pitch location
+  \item \texttt{lag2\_zone} — location two pitches ago
+\end{itemize}
+\vspace{0.05cm}
+\small\textbf{At-bat boundary handling:}
+\small Lag variables reset at the start of each at-bat. First pitch of a new PA receives \texttt{"None"} for all lags.
+\end{column}
+\begin{column}{0.47\textwidth}
+\vspace{-0.4cm}
+\begin{block}{Model-building code (Model 3)}
+\vspace{-0.1cm}
+\footnotesize
+\texttt{multinom(}\\
+\texttt{\ \ pitch\_type \textasciitilde}\\
+\texttt{\ \ prev\_pitch\_type\_1 +}\\
+\texttt{\ \ prev\_zone\_1 +}\\
+\texttt{\ \ prev\_pitch\_type\_2 +}\\
+\texttt{\ \ prev\_zone\_2 +}\\
+\texttt{\ \ balls + strikes + stand,}\\
+\texttt{\ \ maxit = 500)}
+\vspace{-0.1cm}
+\end{block}
+\vspace{-0.1cm}
+\footnotesize Fit per pitcher with $\geq 100$ pitches. MLE via \texttt{nnet::multinom()}.
+\end{column}
+\end{columns}
+
+## Five Model Specifications
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Model} & \textbf{Predictors} & \textbf{Complexity} \\
+\midrule
+1: Simple & lag1/lag2 pitch type, pitch number & 1 \\
+2: Simple $+$ Stand & Model 1 $+$ batter handedness & 2 \\
+3: Basic (full) & Model 2 $+$ balls, strikes, lag1/lag2 zone & 4 \\
+4: Separate & Two models — type only \& zone only & 5 \\
+5: Interaction & Joint pitch type $\times$ zone outcome & 8 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3cm}
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{Development order:}\\
+Model 3 built first (kitchen sink), then Models 4/5 tested alternative outcome structures, then Models 1/2 tested whether simpler approaches were competitive.
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{block}{Model 5 rationale}
+Pitch type and location decisions are correlated, but can we predict them jointly as a single outcome (e.g., "slider in zone 14")?\\
+\footnotesize \textit{Issue: this creates 100$+$ outcome categories and collapses under data sparsity.}
+\end{block}
+\end{column}
+\end{columns}
+
+## Overall Results: Model Performance (Summary)
+```{r}
+overall_model_stats <- accuracies_filtered %>%
+  mutate(model_combined = ifelse(
+    model == "Model 4: Separate",
+    paste(model, "-", model_type), model)) %>%
+  filter(!model_combined %in% c(
+    "Model 4: Separate - Type Only",
+    "Model 4: Separate - Zone Only")) %>%
+  group_by(model_combined) %>%
+  summarise(
+    Mean  = round(mean(accuracy, na.rm = TRUE), 4),
+    SD    = round(sd(accuracy,   na.rm = TRUE), 4),
+    .groups = "drop") %>%
+  arrange(desc(Mean)) %>%
+  rename(Model = model_combined)
+
+knitr::kable(overall_model_stats, format = "latex", booktabs = TRUE)
+```
+
+\vspace{0.2cm}
+\footnotesize \textbf{Key:} Model 3 = 62.36\%; Model 1 = 47.20\%; Model 5 = 23.10\% (below baseline).
+
+## Overall Results: Model Performance (Distribution)
+```{r fig.height=3.5, fig.width=7, out.width="100%"}
+ggplot(accuracies_filtered,
+       aes(x = reorder(paste(model, model_type), accuracy, FUN = median),
+           y = accuracy, fill = model)) +
+  geom_boxplot(alpha = 0.7, outlier.size = 0.5) +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Accuracy Distribution by Model", x = NULL, y = "Accuracy") +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "none")
+```
+
+\footnotesize Model 3's wide distribution signals strong pitcher-to-pitcher variation meaning it excels for predictable pitchers and struggles for unpredictable ones.
+
+## Statistical Significance Testing
+
+```{r, include=FALSE}
+accuracy_comparison <- accuracies_filtered %>%
+  filter(model_type %in% c("Combined", "Combined (Approximated)")) %>%
+  select(model, pitcher, accuracy)
+
+common_pitchers <- accuracy_comparison %>%
+  group_by(pitcher) %>%
+  summarise(n_models = n_distinct(model), .groups = "drop") %>%
+  filter(n_models >= 4) %>%
+  pull(pitcher)
+
+accuracy_comparison <- accuracy_comparison %>%
+  filter(pitcher %in% common_pitchers)
+
+anova_result <- aov(accuracy ~ model, data = accuracy_comparison)
+anova_sum <- summary(anova_result)
+tukey_result <- TukeyHSD(anova_result)
+```
+
+\textbf{ANOVA:} $F(4, 3659) = 483.2$, $p < 2 \times 10^{-16}$ which shows overwhelming evidence of differences
+
+\vspace{0.3cm}
+\textbf{Tukey HSD — Notable Pairwise Comparisons:}
+
+\small
+\begin{center}
+\begin{tabular}{lrrl}
+\toprule
+\textbf{Comparison} & \textbf{Mean Diff} & \textbf{Cohen's d} & \textbf{Effect} \\
+\midrule
+M1 vs M2 (add handedness) & $+$2.54 pp & $-0.232$ & Small \\
+M1 vs M3 (add count$+$zone) & $+$15.16 pp & $-1.011$ & Large \\
+M2 vs M3 (isolate count$+$zone) & $+$12.62 pp & $-0.853$ & Large \\
+M3 vs M4 (joint prediction cost) & $+$28.04 pp & $+1.122$ & Large \\
+M3 vs M5 (interaction failure) & $+$39.26 pp & $+3.413$ & Enormous \\
+M4 vs M5 (separate vs joint) & $+$11.22 pp & $+0.428$ & Medium \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.2cm}
+\footnotesize All 10 pairwise comparisons significant at $\alpha = 0.01$. Count and location contribute the largest marginal gains; Model 5 failure is structurally severe.
+
+## Why Model 5 Failed: Data Sparsity
+
+\begin{columns}
+\begin{column}{0.52\textwidth}
+\textbf{The problem:}
+\begin{itemize}
+  \item $7$–$10$ pitch types $\times$ $14$ zones $= 98$–$140$ outcome categories per pitcher
+  \item A pitcher with 2,500 pitches may produce 80–100 unique type-zone combos
+  \item Many combos appear only 5–10 times which is insufficient for stable MLE
+\end{itemize}
+
+\vspace{0.15cm}
+\footnotesize \textbf{Lesson:} More information can hurt when complexity grows faster than data availability. The theoretical motivation was sound; the practical execution was not.
+\end{column}
+\begin{column}{0.45\textwidth}
+\begin{block}{Why Model 4 fares better}
+\small Model 4 separates the two predictions. Each sub-model has a manageable number of outcome categories (14 pitch types \textit{or} 14 zones). Combined accuracy is approximated as:
+$$\hat{A}_{\text{combined}} = \hat{A}_{\text{type}} \times \hat{A}_{\text{zone}}$$
+The multiplicative penalty still produces low combined accuracy (34.32\%), but the individual models are statistically tractable.
+\end{block}
+\end{column}
+\end{columns}
+
+## Pitcher-Specific Analysis: The Relief vs. Starter Divide
+
+:::::: {.columns}
+::: {.column width="48%"}
+\textbf{Most predictable (min. 500 pitches):}
+```{r}
+pitcher_performance %>%
+  filter(total_pitches >= 500) %>%
+  head(8) %>%
+  select(pitcher, mean_accuracy, total_pitches) %>%
+  mutate(mean_accuracy = round(mean_accuracy, 3)) %>%
+  rename(Pitcher = pitcher, Acc = mean_accuracy, N = total_pitches) %>%
+  knitr::kable(format = "latex", booktabs = TRUE, linesep = "")
+```
+:::
+::: {.column width="48%"}
+\textbf{Least predictable:}
+```{r}
+pitcher_performance %>%
+  filter(total_pitches >= 500) %>%
+  tail(8) %>%
+  select(pitcher, mean_accuracy, total_pitches) %>%
+  mutate(mean_accuracy = round(mean_accuracy, 3)) %>%
+  arrange(mean_accuracy) %>%
+  rename(Pitcher = pitcher, Acc = mean_accuracy, N = total_pitches) %>%
+  knitr::kable(format = "latex", booktabs = TRUE, linesep = "")
+```
+:::
+::::::
+
+\vspace{0.1cm}
+\footnotesize \textbf{Pattern:} Most predictable = relief pitchers (Kahnle, Jansen, Hill). Least predictable = experienced starters (Lugo, Darvish, Alcantara). \textbf{Elite starter unpredictability is a skill, not a modeling artifact.}
+
+## Pitcher Predictability Distribution
+
+:::::: {.columns}
+::: {.column width="55%"}
+```{r fig.height=3.5, fig.width=4}
+ggplot(pitcher_performance, aes(x = mean_accuracy)) +
+  geom_histogram(binwidth = 0.02, fill = "purple", color = "white", alpha = 0.8) +
+  geom_vline(aes(xintercept = mean(mean_accuracy)), color = "red", linetype = "dashed", size = 0.8) +
+  annotate("text", x = mean(pitcher_performance$mean_accuracy) + 0.005, y = Inf, vjust = 2, label = paste0("Mean = ", round(mean(pitcher_performance$mean_accuracy), 3)), color = "red", size = 2.8) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(title = "Distribution of Mean Accuracy Across Pitchers", x = "Mean Accuracy", y = "# Pitchers") +
+  theme_minimal(base_size = 9)
+```
+:::
+::: {.column width="42%"}
+\textbf{Key statistics:}
+\begin{itemize}
+  \item Overall mean: \textbf{48.09\%}
+  \item Median: 45.60\%
+  \item SD: 13.53\%
+  \item Range: \textasciitilde25\% to 70\%$+$
+\end{itemize}
+
+\vspace{0.3cm}
+\textbf{Accuracy--SD correlation:}
+
+$r = 0.566$ ($p < 0.001$)
+
+\vspace{0.2cm}
+More predictable pitchers show \textit{greater model-to-model variance}. When real patterns exist, different models capture different aspects of those patterns. When no patterns exist, all models fail similarly.
+:::
+::::::
+
+## Model Efficiency: Complexity vs. Accuracy
+
+:::::: {.columns}
+::: {.column width="55%"}
+```{r fig.height=3.5, fig.width=4.5}
+model_complexity <- data.frame(
+  Model = c("Model 1: Simple",
+            "Model 2: Simple + Stand",
+            "Model 3: Basic",
+            "Model 4: Separate - Combined (Approximated)",
+            "Model 5: Interaction"),
+  Num_Features = c(3, 4, 7, 7, 10),
+  Complexity_Score = c(1, 2, 4, 5, 8))
+
+overall_model_stats_eff <- accuracies_filtered %>%
+  mutate(model_combined = ifelse(
+    model == "Model 4: Separate",
+    paste(model, "-", model_type), model)) %>%
+  filter(!model_combined %in% c(
+    "Model 4: Separate - Type Only",
+    "Model 4: Separate - Zone Only")) %>%
+  group_by(model_combined) %>%
+  summarise(mean_accuracy = mean(accuracy, na.rm = TRUE), .groups = "drop")
+
+complexity_performance <- model_complexity %>%
+  left_join(overall_model_stats_eff, by = c("Model" = "model_combined")) %>%
+  mutate(efficiency = mean_accuracy / Complexity_Score)
+
+ggplot(complexity_performance,
+       aes(x = reorder(Model, efficiency), y = efficiency, fill = Model)) +
+  geom_col(alpha = 0.8, width = 0.7) +
+  geom_text(aes(label = sprintf("%.4f", efficiency)),
+            hjust = -0.1, size = 3, fontface = "bold") +
+  coord_flip() +
+  labs(title = "Model Efficiency: Accuracy per Complexity Unit",
+       subtitle = "Higher values = better performance relative to complexity",
+       x = NULL, y = "Accuracy / Complexity Score") +
+  theme_minimal(base_size = 9) +
+  theme(plot.title = element_text(face = "bold", size = 9),
+        plot.subtitle = element_text(size = 7),
+        legend.position = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+```
+:::
+::: {.column width="42%"}
+\small\textbf{Recommendations by use case:}
+
+\vspace{0.1cm}
+\begin{block}{Max Accuracy}
+\small\textbf{Model 3} — 62.36\%, large effect sizes justify complexity
+\end{block}
+
+\vspace{0.05cm}
+\begin{block}{Best Efficiency}
+\small\textbf{Model 1} — 47.20\%, minimal computation, easy to deploy
+\end{block}
+
+\vspace{0.05cm}
+\begin{block}{Joint Type + Location}
+\small\textbf{Model 4 (Separate)} — only viable approach; 34.32\%
+\end{block}
+
+\vspace{0.05cm}
+\begin{alertblock}{Avoid}
+\small\textbf{Model 5} — 23.10\%, worst accuracy at highest complexity
+\end{alertblock}
+:::
+::::::
+
+## Limitations
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\small\textbf{Data \& temporal:}
+\begin{itemize}
+  \setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}\small
+  \item Single season (2025) only meaning there was no temporal stability assessment
+  \item Static models don't capture within-season adjustments (fatigue, injury, opponent adaptation)
+\end{itemize}
+\vspace{0.05cm}
+\small\textbf{Methodological:}
+\begin{itemize}
+  \setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}\small
+  \item No formal cross-validation, but relative comparisons remain valid even if absolute accuracy is slightly optimistic
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\small\textbf{Contextual:}
+\begin{itemize}
+  \setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}\small
+  \item Broad game context excluded: score differential, base-out state, inning, bullpen availability
+  \item Catcher influence ignored. Catchers significantly shape pitch selection, especially for younger pitchers
+\end{itemize}
+\vspace{0.05cm}
+\small\textbf{Scope:}
+\begin{itemize}
+  \setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}\small
+  \item No field experiment meaning we cannot establish that predictions improve offensive performance
+  \item Results are correlational, not causal
+\end{itemize}
+\end{column}
+\end{columns}
+
+## Future Research Directions
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{Modeling improvements:}
+\begin{itemize}
+  \item \textbf{Multi-season analysis} — do pitcher patterns persist across years?
+  \item \textbf{Hierarchical Bayesian models} — let pitchers "borrow strength" from similar pitchers
+  \item \textbf{Recurrent neural networks} — longer sequence memory beyond a two-pitch lookback
+  \item \textbf{Hidden Markov Models} — uncover latent pitcher "modes" (aggressive vs. conservative)
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Substantive research questions:}
+\begin{itemize}
+  \item Does predictability correlate with ERA / WAR?
+  \item Do patient hitters exploit predictable pitchers more than aggressive hitters?
+  \item Can predictability changes serve as an early injury indicator?
+  \item Can we add base-out state, score differential, inning, or more?
+\end{itemize}
+\vspace{-0.1cm}
+\begin{block}{Possible Future Goal}
+\small Controlled field experiment where we deploy predictions to minor league hitters and measure offensive outcome changes
+\end{block}
+\end{column}
+\end{columns}
+
+## Conclusion
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\begin{enumerate}
+  \item \textbf{Game state drives selection.} Count is the dominant predictor as adding it yielded a 12.62 pp gain ($d = -0.853$)
+  \item \textbf{Role predicts predictability.} Relief pitchers are more predictable; elite starter unpredictability is a cultivated skill
+\end{enumerate}
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{enumerate}\setcounter{enumi}{2}
+  \item \textbf{Complexity must match data.} Model 5's failure ($d = 3.413$) shows what happens when categories outgrow the data
+  \item \textbf{Classical methods are competitive.} MLR at 62.36\% matches neural network benchmarks while staying interpretable
+\end{enumerate}
+\end{column}
+\end{columns}
+
+\vspace{0.2cm}
+\begin{block}{Broader applicability}
+\small Categorical lagged variables in multinomial logistic regression can be applied beyond baseball where behavior unfolds in structured categorical sequences like healthcare, digital behavior, and other sequential decision systems.
+\end{block}
+
+\vspace{0.05cm}
+\footnotesize Thesis advisor: Dr. Scott Alberts\\
+Department of Computer and Data Sciences\\
+Truman State University, 2026
+
+## Questions
+
+\begin{center}
+\vspace{0.5cm}
+{\Large\color{truman}\textbf{Questions?}}
+
+\vspace{0.6cm}
+{\large Part 2 — Technical Deep Dive}
+
+\vspace{0.6cm}
+\begin{block}{}
+\centering
+Thank you to Dr.\ Alberts and my committee\\
+for their guidance throughout this research.\\[0.3cm]
+\textit{Full thesis, code, and app available upon request.}
+\end{block}
+
+\vspace{0.4cm}
+\footnotesize
+\textbf{App:} \url{https://b-bruxvoort.shinyapps.io/pitch_type_prediction_app/}
+\end{center}

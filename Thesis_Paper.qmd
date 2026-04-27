@@ -1,0 +1,1785 @@
+---
+title: ""
+author: ""
+date: ""
+format:
+  pdf:
+    documentclass: report
+    classoption: oneside
+    geometry:
+      - top=1in
+      - bottom=1in
+      - left=1in
+      - right=1in
+    mainfont: "Times New Roman"
+    fontsize: 12pt
+    linestretch: 2
+    toc: false
+    toc-depth: 3
+    number-sections: true
+    include-in-header:
+      text: |
+        \usepackage{fancyhdr}
+        \usepackage{tocloft}
+        \usepackage{indentfirst}
+        \usepackage{titlesec}
+        \usepackage{setspace}
+        \usepackage[hidelinks]{hyperref}
+        \hypersetup{colorlinks=false, pdfborder={0 0 0}}
+        \setlength{\parindent}{0.5in}
+        \setlength{\parskip}{0pt}
+        \titleformat{\chapter}[hang]{\normalfont\huge\bfseries}{\thechapter.}{1em}{}
+        \titlespacing*{\chapter}{0pt}{0pt}{20pt}
+        \pagestyle{fancy}
+        \fancyhf{}
+        \fancyfoot[C]{\thepage}
+        \renewcommand{\cfttoctitlefont}{\hfill\Large\bfseries\MakeUppercase}
+        \renewcommand{\cftaftertoctitle}{\hfill}
+        \renewcommand{\cftchappagefont}{}
+        \renewcommand{\cftchapaftersnum}{.}
+        \renewcommand{\cftsecaftersnum}{.}
+        \setlength{\cftbeforechapskip}{0pt}
+        \setlength{\cftbeforesecskip}{0pt}
+        \setlength{\cftbeforesubsecskip}{0pt}
+        \setlength{\cftbeforesubsubsecskip}{0pt}
+        \renewcommand{\contentsname}{TABLE OF CONTENTS}
+        \renewcommand{\listtablename}{LIST OF TABLES}
+        \renewcommand{\listfigurename}{LIST OF FIGURES}
+        \renewcommand{\cftloftitlefont}{\hfill\Large\bfseries\MakeUppercase}
+        \renewcommand{\cftafterloftitle}{\hfill}
+        \renewcommand{\cftlottitlefont}{\hfill\Large\bfseries\MakeUppercase}
+        \renewcommand{\cftafterlottitle}{\hfill}
+        \AtBeginDocument{
+          \hypersetup{colorlinks=false, allcolors=black, pdfborder={0 0 0}}
+          \renewcommand{\contentsname}{TABLE OF CONTENTS}
+          \renewcommand{\listtablename}{LIST OF TABLES}
+          \renewcommand{\listfigurename}{LIST OF FIGURES}
+        }
+    code-fold: true
+    fig-width: 8
+    fig-height: 6
+    keep-tex: true
+bibliography: references.bib
+csl: apa.csl
+---
+
+```{=latex}
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+\vspace*{0.5in}
+{\large PREDICTING PITCH SEQUENCES IN BASEBALL USING MULTINOMIAL LOGISTIC REGRESSION}
+\vspace{0.75in}
+\begin{singlespace}
+A Thesis Submitted in Partial Fulfillment\\
+of the Requirements for the Degree of\\
+Master of Science\\
+\vspace{0.5in}
+by\\
+\vspace{\baselineskip}
+Brian Bruxvoort\\
+\vspace{\baselineskip}
+Dr.\ Scott Alberts, Thesis Advisor\\
+Department of Computer and Data Sciences\\
+School of Science and Mathematics\\
+2026
+\vfill
+TRUMAN STATE UNIVERSITY\\
+Kirksville, Missouri
+\end{singlespace}
+\end{center}
+\end{titlepage}
+\pagenumbering{roman}
+\setcounter{page}{2}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+```
+
+# ACKNOWLEDGEMENTS {.unnumbered .unlisted}
+
+First and foremost, I would like to thank my amazing family, who has supported me every step of the way. This thesis is not just the culmination of my academic journey - it is a shared accomplishment that I could not have achieved without you. Being surrounded by so much love and encouragement has given me the confidence to know that anything is possible.
+
+I would also like to extend my sincere gratitude to my thesis advisor and committee members. Having worked alongside many of you throughout my graduate studies, your guidance, support, and investment in my success have not gone unnoticed and is deeply appreciated. I am especially grateful for your willingness to provide thoughtful feedback and constructive critiques, which were invaluable in helping me produce a finished product I am proud of.
+
+I would like to offer a special thank you to Dr. Alberts, who has been instrumental in my success since the very first day I stepped on campus as a transfer undergraduate student. Transfer students can often feel like outsiders when entering a new program, and your immediate warmth and encouragement made all the difference. Thank you for welcoming me so wholeheartedly into the statistics and data science community.
+
+I would also like to thank Dr. DeCock, who served as an incredible mentor to me beyond the classroom. Your guidance around career goals and aspirations helped shape the direction of my path in ways I will always be grateful for. Most importantly, your encouragement to continue my education and pursue a Master's degree was the push I needed, and this thesis stands as a direct result of that conversation.
+
+To Camden, Bryce, and Evan, thank you for being such fantastic people to work with during my undergraduate years. Your friendship made that chapter of my academic journey truly memorable, and I am lucky to have worked with you during that time.
+
+I would also like to acknowledge my coaches and teammates throughout my baseball career. The sport taught me so much including discipline, perseverance, resiliency and the value of being part of something bigger than yourself. The passion for the game that you all helped foster in me extends far beyond the field, and your influence played a meaningful role in getting me to where I am today.
+
+I would also like mention Rob Friedman, also known as "Pitching Ninja," whose YouTube videos and in-depth analysis of pitching ideology shaped my development as a pitcher. His work was also a direct source of inspiration for this thesis, as it sparked the idea of blending my background in data science with my lived experience as a collegiate baseball pitcher. That intersection of passion and education is what this research is truly built on.
+
+Finally, I want to reflect on just how much this journey has meant to me. What began as a love of baseball and a curiosity for numbers has grown into something I could have never imagined. This thesis represents not only years of hard work and learning, but the coming together of every mentor, teammate, friend, and family member who believed in me along the way. I am deeply grateful for all of it, and I carry each of your influences with me as I wrap up my educational career.
+
+\newpage
+```{=latex}
+{\singlespacing
+\setlength{\cftbeforechapskip}{6pt}
+\setlength{\cftbeforesecskip}{0pt}
+\setlength{\cftbeforesubsecskip}{0pt}
+\tableofcontents
+}
+
+\newpage
+{\singlespacing
+\listoftables
+\addcontentsline{toc}{chapter}{LIST OF TABLES}
+}
+
+\newpage
+{\singlespacing
+\listoffigures
+\addcontentsline{toc}{chapter}{LIST OF FIGURES}
+}
+```
+
+\newpage
+
+```{=latex}
+\newpage
+\thispagestyle{fancy}
+\begin{center}
+\begin{singlespace}
+PREDICTING PITCH SEQUENCES IN BASEBALL USING MULTINOMIAL LOGISTIC REGRESSION
+
+An Abstract of the Thesis by
+
+Brian Bruxvoort
+\end{singlespace}
+\end{center}
+\vspace{0.3cm}
+```
+
+This research develops multinomial logistic regression models for predicting pitch sequences in Major League Baseball using Statcast data from the 2025 regular season. Individual models were constructed for each pitcher rather than a single league-wide model, with predictors restricted to observable game state variables including pitch history, ball-strike count, batter handedness, and pitch location zone. The comprehensive model achieved 62.36% classification accuracy, substantially exceeding the 32% naive baseline. Pitcher predictability varied considerably, with relief pitchers proving systematically more predictable than starting pitchers due to their narrower repertoires and more defined roles. A joint pitch type and location model failed due to severe data sparsity created by the expansion of outcome categories. These findings offer practical implications for scouting and hitter preparation while demonstrating that classical statistical methods can effectively model sequential pitch selection patterns.
+
+```{=latex}
+\clearpage
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\pagenumbering{arabic}
+```
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, 
+  warning = FALSE, 
+  message = FALSE,
+  fig.align = "center")
+```
+
+# Introduction
+
+Baseball, often referred to as America's pastime, has evolved from a simple game of bats and balls into a complex strategic battle where every pitch matters. At the heart of this battle lies one of the game's most intriguing questions: what pitch will the pitcher throw next? This seemingly simple question has been the focus of players, coaches, and analysts for generations, as the ability to anticipate the next pitch can dramatically shift the competitive balance between hitter and pitcher.
+
+A hitter who successfully anticipates the type and location of an incoming pitch gains precious milliseconds to react which is a critical advantage in a sport where a 95 mph fastball travels from the pitcher's hand to home plate in approximately 400 milliseconds [@boddy2012]. This competitive advantage has led to numerous controversies throughout baseball history, from traditional sign-stealing techniques to more recent scandals involving electronic devices, as exemplified by the 2017 Boston Red Sox incident where the team allegedly used Apple Watches to decode opposing catchers' signals [@stratton2018].
+
+As technology has advanced, advanced analytics and machine learning have been introduced. Due to this advancement, the approach to understanding and predicting pitch sequences has fundamentally transformed. Modern baseball generates vast quantities of data through systems like MLB's Statcast, which tracks every pitch thrown in every game with unprecedented detail [@mlb2024]. This data revolution has created new opportunities for researchers to apply sophisticated statistical and computational methods to the age-old problem of pitch prediction.
+
+This thesis addresses the challenge of predicting pitch sequences in Major League Baseball using multinomial logistic regression models. Unlike previous research that has focused primarily on neural networks or support vector machines, this study leverages the interpretability and efficiency of logistic regression while building individual models for each pitcher in the 2025 MLB season. By focusing on readily observable game state variables which include count, batter handedness, and pitch history, this research aims to create a practical, implementable system that could be utilized in real-time during games.
+
+## Research Objectives
+
+The primary objective of this research is to develop and evaluate multiple iterations of multinomial logistic regression models that predict pitch type based on easily trackable game situation variables. Rather than pursuing the absolute highest possible prediction accuracy through complex feature engineering, this study prioritizes practical usability and real-world applicability.
+
+This research makes several contributions to the existing literature on pitch prediction. First, it provides a systematic comparison of multinomial logistic regression models with varying levels of complexity, demonstrating the tradeoffs between model sophistication and prediction accuracy. Second, it builds separate models for each pitcher rather than a single league-wide model, accounting for individual pitching styles and tendencies. Third, it emphasizes practical implementation by restricting predictors to variables that are readily observable during live game situations. Finally, it provides comprehensive statistical analysis comparing model performance across different specifications, offering insights into which game state variables contribute most significantly to pitch prediction accuracy.
+
+## Literature Review
+
+The study of pitch sequences and pitch prediction in baseball has evolved significantly over the past two decades, driven by advances in data collection technology and analytical methodologies. This literature review examines three interconnected areas of research: the strategic importance of pitch sequences, various approaches to predicting pitch types, and the specific application of logistic regression models to this problem.
+
+### The Strategic Role of Pitch Sequences
+
+Clay [-@clay2023] conducted one of the most comprehensive recent studies on two-pitch sequence behavior using discrete-time Markov chains to analyze pitch location patterns. Examining data from 87 American League pitchers during the 2019 season, Clay found that pitchers could be grouped into five distinct clusters based on their two-pitch location sequence behaviors, with significant differences in performance metrics between groups. Notably, the highest-performing group included elite pitchers like Justin Verlander and Gerrit Cole, who demonstrated what Clay termed "situational variance" which as he put it, the elite pitchers varied their two-pitch sequences more than other groups in certain game situations while remaining consistent in others, particularly when beginning and ending at-bats.
+
+Boddy [-@boddy2012] provided practical insights into pitch sequencing strategies from a training perspective, emphasizing data driven decision making in pitch selection. Drawing on large scale data mining of MLB pitches, Boddy outlined how different pitch types serve distinct strategic purposes. Fastballs establish velocity expectations and generate strikes, curveballs disrupt timing, sliders generate strikeouts, and change-ups/sinkers induce groundballs. His analysis revealed that sliders have the highest "whiff rate" while curveballs have the highest "watch rate," suggesting that pitch effectiveness depends heavily on game situation and previous pitch selection [@boddy2012].
+
+### Machine Learning Approaches to Pitch Prediction
+
+The application of machine learning to pitch prediction has expanded dramatically since the early 2010s, with researchers using increasingly sophisticated techniques. Ganeshapillai and Guttag [-@ganeshapillai2012] conducted work in this area as they developed linear support vector machines to predict pitch types for individual pitchers. Using data from the 2008 and 2009 MLB seasons, they built separate models for 359 pitchers, incorporating 48 features including previous pitch, count, score differential, base runners, and pitcher tendencies. Their analysis revealed that previous pitcher actions specific to the count and pitcher behavior toward specific batters were among the most important predictive features [@ganeshapillai2012].
+
+More recent work has leveraged neural networks and deep learning architectures. Augustine [-@augustine2024] developed "MLB Pitch Predictor" using Azure Machine Learning Studio, applying a Multiclass Boosted Decision Tree algorithm to predict pitches thrown by Tyler Glasnow. After incorporating data from both 2023 and early 2024 seasons, Augustine achieved a 66% overall accuracy rate, with the model reaching 73% accuracy in specific game applications. Importantly, Augustine's work highlighted practical limitations of pitch prediction models, including a pitcher's ability to adjust strategies mid-game, park factors, umpire strike zone variability, and the fundamental unpredictability of human decision-making [@augustine2024].
+
+Lee [-@lee2022] expanded the prediction problem beyond pitch type to simultaneously predict both pitch type and location, classifying pitches into 34 categories. Using an ensemble of deep neural networks, Lee achieved 62.4% accuracy compared to a naive baseline of 8.2%. Interestingly, Lee's analysis revealed that prediction accuracy increased in specific game situations, particularly when the pitcher's team was losing, when the count was unfavorable to the pitcher, or when a runner was in scoring position [@lee2022]. These findings suggest that pitchers become more predictable under pressure, following established patterns more closely when game situations are disadvantageous.
+
+### Logistic Regression Models for Pitch Prediction
+
+Despite the expansion of complex machine learning techniques, logistic regression remains relevant for pitch prediction due to its interpretability, computational efficiency, and strong performance when appropriately specified. Stratton [-@stratton2018] conducted extensive research on pitch prediction using Bayesian hierarchical multinomial regression, specifically analyzing Clayton Kershaw's pitching data from 2008 to 2014. Stratton's approach grouped pitches by catcher, recognizing that different catcher-pitcher relationships might result in different pitch calling patterns [@stratton2018].
+
+Stratton employed a Block Metropolis-within-Gibbs sampler to estimate the hierarchical model, that predicted pitch type based on count and previous pitch type. A key finding was that the hierarchical model significantly outperformed its non-hierarchical counterpart, providing "extremely strong evidence" that accounting for catcher-specific effects improved prediction quality. The hierarchical modeling approach offers particular advantages through shrinkage estimators that "borrow information" across groups in the hierarchy, resulting in more stable estimates for catchers with limited data [@@stratton2018].
+
+Hastie and Powers [-@hastie2011] explored the interpretability advantages of logistic regression in predicting baseball outcomes, emphasizing how regression coefficients can be directly interpreted as log-odds ratios. This interpretability allows coaches and analysts to understand not just which pitch is most likely, but why that information may be as valuable as the prediction itself [@hastie2011].
+
+### Research Gaps and Present Study
+
+While existing research has made substantial progress in understanding and predicting pitch sequences, several gaps remain. First, much of the recent research has focused on maximizing prediction accuracy through complex neural networks, sometimes at the expense of practical implementability and interpretability. Second, many studies have built league-wide models rather than pitcher-specific models, potentially missing important individual differences in pitching strategy. Third, few studies have systematically compared models of increasing complexity to identify the optimal balance between sophistication and performance.
+
+This thesis addresses these gaps in a few ways. The first is developing multinomial logistic regression models that prioritize practical usability while maintaining competitive accuracy. Second, it builds separate models for each pitcher to account for individual tendencies and styles. Third, it systematically compares five model specifications of increasing complexity to identify which additional features provide meaningful improvements in prediction accuracy. Lastly, it uses only variables that are readily observable during live games, ensuring the models could be implemented in real-time situations.
+
+# Data
+
+The foundation of this research is Statcast data from the 2025 Major League Baseball regular season, obtained through the MLB's BaseballSavant website. Statcast is MLB's official tracking technology, using high-resolution cameras and radar equipment to record detailed information about every pitch, swing, and play across all MLB games.
+
+Due to BaseballSavant's limitations on quantity of exportable pitch data, the pitch data for each individual team was exported individually. BaseballSavant limits the user to exporting a maximum of 25,000 rows (pitches) of data. Thankfully, each team threw no more than 25,000 pitches throughout the 2025 season. After the pitch data for each team was exported, they were then combined into one dataset using joins so that the analysis could be completed.
+
+The newly created raw dataset contained 118 variables capturing diverse aspects of each pitch, including pitch velocity, spin rate, release point coordinates, pitch movement characteristics, batted ball outcomes, and contextual game state information. The complete dataset comprised 712,528 individual pitch observations, which represents the total number of pitches thrown across all MLB games during the 2025 regular season.
+
+## Variable Selection
+
+For the purposes of this research, a subset of variables was selected based on two primary criteria. The first was relevance to pitch prediction modeling, and the second was practical observability during live game situations. The following variables were retained for analysis:
+
+- **pitch_type**: The classification of pitch type (e.g., four-seam fastball, slider, curveball)
+- **player_name**: The name of the pitcher
+- **zone**: The pitch location zone within or around the strike zone (14 distinct zones)
+- **stand**: Batter handedness (left-handed or right-handed)
+- **balls**: The number of balls in the current count
+- **strikes**: The number of strikes in the current count
+- **at_bat_number**: Sequential identifier for the at-bat within the game
+
+This variable selection strategy reflects a deliberate emphasis on model interpretability and practical implementation. While more sophisticated feature engineering incorporating variables such as spin axis, release height, or pitch movement characteristics could potentially enhance predictive accuracy, such an approach introduces several complications. First, these variables are not readily observable during live games without specialized equipment. Second, extensive feature engineering increases the risk of model overfitting. Third, many of the 118 available variables exhibit substantial multicollinearity. For instance, spin axis, velocity, and horizontal/vertical break are all interrelated and collectively determine pitch type.
+
+By restricting the analysis to basic, observable game state variables, this research prioritizes the development of models that are simultaneously interpretable, computationally efficient, and implementable in real-time game contexts.
+
+### Load Required Libraries
+
+```{r}
+library(tidyverse)
+library(nnet)
+library(caret)
+library(knitr)
+```
+
+### Load Raw Data
+
+```{r}
+pitch_data1 <- read.csv("pitch_data.csv")
+
+cat("Dataset dimensions:", nrow(pitch_data1), "rows x", ncol(pitch_data1), "columns\n")
+```
+
+```{r}
+selected_columns <- c(
+  "pitch_type", "player_name", "batter", "pitcher", "events", 
+  "description", "zone", "stand", "p_throws", "type", "hit_location",
+  "bb_type", "balls", "strikes", "pfx_x", "pfx_z", "plate_x", "plate_z",
+  "outs_when_up", "inning", "sz_top", "sz_bot", "effective_speed",
+  "release_spin_rate", "release_extension", "release_pos_y",
+  "at_bat_number", "pitch_number", "pitch_name", "spin_axis",
+  "n_thruorder_pitcher", "arm_angle")
+
+pitch_data_clean <- pitch_data1[, selected_columns]
+```
+
+```{r}
+selected_columns <- c("pitch_type", "player_name", "zone", "stand", "balls", "strikes", "at_bat_number", "pitch_number","n_thruorder_pitcher")
+
+pitch_data <- pitch_data1[, selected_columns]
+```
+
+## Descriptive Statistics
+
+Before getting into the modeling and analysis, exploratory analysis of the 2025 MLB pitch data was completed to examine the distribution of key variables and identifying patterns that will inform the modeling approach.
+
+### Pitch Type Distribution
+
+```{r fig.cap="Distribution of Pitch Types in 2025 MLB Season"}
+pitch_type_summary <- pitch_data %>%
+  count(pitch_type) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  arrange(desc(n))
+
+ggplot(pitch_type_summary, aes(x = reorder(pitch_type, -n), y = n, fill = pitch_type)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  geom_text(aes(label = paste0(n, "\n(", round(percentage, 1), "%)")), vjust = -0.5, size = 3.5) +
+  labs(title = "Distribution of Pitch Types", subtitle = paste("Total pitches:", sum(pitch_type_summary$n)), x = "Pitch Type", y = "Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The pitch type abbreviations used in this paper are defined as follows:
+
+- **CH** - Changeup
+- **CU** - Curveball
+- **FC** - Cutter
+- **EP** - Eephus
+- **FO** - Forkball
+- **FF** - Four-Seam Fastball
+- **KN** - Knuckleball
+- **KC** - Knuckle-curve
+- **SC** - Screwball
+- **SI** - Sinker
+- **SL** - Slider
+- **SV** - Slurve
+- **FS** - Splitter
+- **ST** - Sweeper
+
+Figure 2.1 displays the frequency distribution of pitch types across all 712,528 pitches in the dataset. Four-seam fastballs (FF) dominate MLB pitching, accounting for 231,059 pitches (31.7% of all pitches thrown). Sinkers (SI) represent the second-most common pitch type with 110,593 pitches (15.5%), followed by sliders (SL) at 104,875 pitches (14.7%) and changeups (CH) at 73,074 pitches (10.3%).
+
+The dominance of fastballs/sinkers and the relative frequency of other pitch types establish a baseline expectation: any effective prediction model should at minimum perform better than a naive baseline that always predicts the most common pitch type. Such a baseline would achieve 31.7% accuracy if fastballs were the only predicted pitch, which is a benchmark that contextualizes future model performance.
+
+### Zone Distribution
+
+```{r fig.cap="Distribution of Pitch Locations Across Strike Zones"}
+zone_summary <- pitch_data %>%
+  count(zone) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  arrange(desc(n))
+
+ggplot(zone_summary, aes(x = reorder(zone, -n), y = n, fill = factor(zone))) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  geom_text(aes(label = paste0(n, "\n(", round(percentage, 1), "%)")), vjust = -0.5, size = 3) +
+  labs(title = "Distribution of Pitch Zones", subtitle = paste("Total pitches:", sum(zone_summary$n)), x = "Zone", y = "Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14), axis.text.x = element_text(angle = 0, hjust = 0.5))
+```
+
+![Strike Zone Layout with 14 Zones](pitch_zones.png){fig-cap="Strike Zone Layout with 14 Zones" fig-align="center" width="50%"}
+\begin{center}
+\textit{Note: The zone graphic is from the catcher/umpire's point of view.}
+\end{center}
+
+Figure 2.2 illustrates the spatial distribution of pitches across the 14 defined strike zones. Zone 14, representing pitches outside and off the plate, contains the highest frequency of pitches at (17.8%). The distribution reveals that approximately 60% of pitches are thrown within the official strike zone (zones 1-9), with the remaining 40% thrown outside the zone.
+
+### Count Distribution
+
+```{r fig.cap="Distribution of Ball-Strike Counts"}
+count_summary <- pitch_data %>%
+  count(balls, strikes) %>%
+  mutate(percentage = n / sum(n) * 100, count_label = paste0(balls, "-", strikes)) %>%
+  arrange(balls, strikes)
+
+ggplot(count_summary, aes(x = factor(strikes), y = factor(balls), fill = n)) +
+  geom_tile(color = "white", size = 1) +
+  geom_text(aes(label = paste0(n, "\n(", round(percentage, 1), "%)")), color = "white", size = 4, fontface = "bold") +
+  scale_fill_gradient(low = "#3B4CC0", high = "#B40426", name = "Count") +
+  labs(title = "Distribution of Pitch Counts (Balls-Strikes)", x = "Strikes", y = "Balls") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14), axis.text = element_text(size = 11), panel.grid = element_blank())
+```
+
+Figure 2.4 presents the frequency distribution of all possible ball-strike count combinations. The most common count is 0-0 (183,362 pitches, 25.7%), which necessarily appears at the beginning of every plate appearance. Two-strike counts collectively account for approximately 30% of all pitches, while full counts (3-2) occur with moderate frequency (35,841 pitches, 5.0%).
+
+### Batter Handedness
+
+```{r fig.cap="Batter Handedness Distribution"}
+stand_summary <- pitch_data %>%
+  count(stand) %>%
+  mutate(percentage = n / sum(n) * 100,
+         stand_label = case_when(
+           stand == "R" ~ "Right-Handed",
+           stand == "L" ~ "Left-Handed",
+           TRUE ~ as.character(stand))) %>% arrange(desc(n))
+
+ggplot(stand_summary, aes(x = "", y = n, fill = stand_label)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(stand_label, "\n", n, "\n(", round(percentage, 1), "%)")), position = position_stack(vjust = 0.5), size = 5, fontface = "bold") +
+  scale_fill_manual(values = c("Left-Handed" = "#2E86AB", "Right-Handed" = "#A23B72")) +
+  labs(title = "Batter Handedness Distribution (Pie Chart)") +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", size = 14, hjust = 0.5), legend.position = "none")
+```
+
+Figure 2.5 displays the distribution of batter handedness. Right-handed batters faced 394,796 pitches (55.4%), while left-handed batters faced 317,732 pitches (44.6%). This approximate 55-45 split ensures sufficient data to estimate handedness-specific effects with reasonable precision.
+
+### Pitch Sequences
+
+```{r fig.cap="Top 15 Most Common Two-Pitch Sequences"}
+pitch_sequences <- pitch_data1 %>%
+  arrange(pitcher, game_date, at_bat_number, pitch_number) %>%
+  group_by(pitcher, game_date, at_bat_number) %>%
+  mutate(prev_pitch = lag(pitch_type)) %>%
+  ungroup() %>%
+  filter(!is.na(prev_pitch)) %>%
+  count(prev_pitch, pitch_type) %>%
+  group_by(prev_pitch) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ungroup()
+
+top_sequences <- pitch_sequences %>%
+  arrange(desc(n)) %>%
+  head(15) %>%
+  mutate(sequence = paste(prev_pitch, "→", pitch_type))
+
+ggplot(top_sequences, aes(x = reorder(sequence, n), y = n, fill = sequence)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  geom_text(aes(label = paste0(n, " (", round(percentage, 1), "%)")), hjust = -0.1, size = 3.5) +
+  coord_flip() +
+  labs(title = "Top 15 Most Common Pitch Sequences", x = "Pitch Sequence", y = "Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+```
+
+Figure 2.6 presents the 15 most frequently observed two-pitch sequences, sorted by raw count. It is important to note that the percentages shown reflect conditional probabilities rather than overall proportions as each percentage represents how often a given pitch type follows the first pitch in that sequence, not the sequence's share of all pitches thrown. For example, FF→FF occurring 73,078 times with a 43.1% label means that after a four-seam fastball is thrown, pitchers follow it with another four-seam fastball 43.1% of the time. Other frequent patterns include sinker-sinker sequences (28,659 times, 36%), meaning sinkers are followed by another sinker 36% of the time, slider-slider sequences (27,518 times, 35.3%), and fastball-slider sequences (25,375 times, 15%). Because the percentages are conditioned on different first pitches, they cannot be directly compared across sequences, which is why the graph is ordered by count rather than percentage.
+
+### Pitch Type by Zone
+
+```{r fig.cap="Top 15 Most Common Pitch Type-Zone Combinations"}
+pitch_zone_summary <- pitch_data1 %>%
+  count(pitch_type, zone) %>%
+  group_by(pitch_type) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  ungroup()
+top_pitch_zone <- pitch_zone_summary %>%
+  arrange(desc(n)) %>%
+  head(15) %>%
+  mutate(combination = paste(pitch_type, "- Zone", zone))
+ggplot(top_pitch_zone, aes(x = reorder(combination, n), y = n, fill = pitch_type)) +
+  geom_bar(stat = "identity", show.legend = TRUE) +
+  geom_text(aes(label = paste0(n, " (", round(percentage, 1), "%)")), hjust = -0.1, size = 3.5) +
+  coord_flip() +
+  labs(title = "Top 15 Most Common Pitch Type-Zone Combinations", x = "Pitch Type - Zone", y = "Count", fill = "Pitch Type") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+```
+
+Figure 2.7 displays the most frequently observed combinations of pitch type and pitch location zone, sorted by raw count. As with Figure 2.6, the percentages shown are conditional which means each percentage represents how often a given pitch type is thrown to that particular zone relative to all locations that pitch type is thrown, not the combination's share of all pitches. For example, fastballs thrown to zone 11 represent the single most common pitch-location combination (38,897 times), meaning that of all four-seam fastballs thrown, that percentage land in zone 11 which is consistent with the newer yet conventional strategy of "elevating the fastball." Sliders appear most frequently in zone 14 (outside off the plate, 31,034 occurrences), reflecting their strategic use as "chase" pitches, with that percentage of all sliders being thrown to that location. Changeups concentrate in zones 13 and 14 (low and outside), corresponding to their designed downward movement to induce groundballs. Because percentages are conditioned on each individual pitch type, they cannot be directly compared across different pitch types, which is why the graph is ordered by count rather than percentage.
+
+# Methodology
+
+This chapter describes the analytical approach employed to predict pitch sequences in Major League Baseball. The research design emphasizes practical implementation and model interpretability while maintaining competitive predictive accuracy.
+
+## Research Design
+
+This research uses a quantitative, predictive modeling approach analyzing pitch sequencing in the 2025 MLB season. Rather than building a single league-wide model, the analytical strategy constructs individual multinomial logistic regression models for each pitcher who threw a sufficient number of pitches during the season.
+
+The research design follows a systematic model comparison framework, evaluating five distinct model specifications of increasing complexity. Each successive model adds additional predictor variables, allowing assessment of whether increased complexity yields proportionate improvements in predictive accuracy. Model performance is evaluated using classification accuracy as the primary metric as the proportion of pitches correctly predicted.
+
+## Theoretical Framework
+
+### Multinomial Logistic Regression Framework
+
+Multinomial logistic regression extends binary logistic regression to accommodate outcome variables with more than two categories. In this application, the outcome variable is pitch type, which can take on multiple values (fastball, slider, curveball, changeup, etc.). The model estimates the probability of each possible pitch type conditional on the observed predictor variables.
+
+For an observation *i* with predictor vector **X**_*i*, the probability that the outcome falls into category *j* is modeled as:
+
+$$P(Y_i = j | \mathbf{X}_i) = \frac{\exp(\mathbf{X}_i \boldsymbol{\beta}_j)}{\sum_{k=1}^{J} \exp(\mathbf{X}_i \boldsymbol{\beta}_k)}$$
+
+where *J* represents the total number of pitch type categories, and **β**_*j* represents the coefficient vector associated with category *j*. This formulation ensures that predicted probabilities sum to 1 across all categories.
+
+The model estimates *J*-1 sets of coefficients, with one category serving as the reference group. Coefficients can be interpreted as log-odds ratios. Bascially, a one-unit increase in predictor *X* changes the log-odds of observing pitch type *j* relative to the reference category by β_*j*.
+
+### Methodological Innovation: Lagged Variables
+
+A key contribution of this research is demonstrating how multinomial logistic regression can be adapted for sequential prediction through careful incorporation of lagged variables. This combination addresses a methodological gap in some previous pitch prediction research.
+
+Multinomial logistic regression is optimal for unordered categorical outcomes, like what is being predicted here. It produces interpretable probability distributions rather than hard classifications, and offers coefficient interpretability through log-odds ratios. Unlike neural networks, the model structure remains transparent, allowing analysts to understand why specific predictions are made.
+
+Pitch selection is inherently sequential as pitchers use previous pitches to "set up" subsequent pitches. Lagged variables (lag1_pitch_type, lag2_pitch_type, lag1_zone, lag2_zone) implement this sequential dependency by including previous pitches as predictors.
+
+Combining categorical lagged variables with multinomial logistic regression introduces several challenges. The first is parameter expansion as each categorical lag requires multiple indicator variables. Another is at-bat boundary handling as sequences segment at at-bat boundaries. And finally, multiple lag types as this requires the model to learn multi-dimensional sequential patterns. This research demonstrates that classical statistical methods can successfully incorporate sequential dependencies while maintaining interpretability and computational efficiency.
+
+### Alternative Approaches Considered
+
+During model development, random forest and XGBoost models were constructed and evaluated using the same predictor variables and training data. However, after initial testing, it was revealed that these sophisticated algorithms provided no meaningful improvement in classification accuracy compared to multinomial logistic regression. Random forest models achieved accuracy to that of logistic regression models, but it required substantially greater computational resources.
+
+This result makes intuitive sense as pitch selection is fundamentally a linear decision process influenced by readily identifiable factors. When the underlying data-generating process is approximately linear, simpler models often match or exceed the performance of complex alternatives while offering superior interpretability.
+
+## Model Specifications
+
+Five distinct model specifications were developed and evaluated, each incorporating different combinations of predictor variables. All models use the same underlying multinomial logistic regression framework, differing only in the predictors included.
+
+The models were developed through an iterative process. Model 3 (Basic Model) was created first as a comprehensive "kitchen sink" approach including all readily observable predictors. Following this baseline, Models 4 and 5 explored alternative ways of modeling the relationship between pitch type and location using interactions and interaction variables. Finally, Models 1 and 2 were developed to test whether simpler specifications could achieve comparable accuracy, while favoring low computational capabilities and ease of implementation.
+
+### Model 1: Simple Model
+
+The first model specification represents the minimal viable approach to pitch prediction, incorporating only information about recent pitch history and position within the at-bat.
+
+**Predictor variables:**
+
+- lag1_pitch_type: The type of pitch thrown immediately before the current pitch
+
+- lag2_pitch_type: The type of pitch thrown two pitches ago
+
+- pitch_number: The sequential number of the current pitch within the at-bat
+
+This specification tests whether simple pitch sequencing patterns alone provide meaningful predictive information.
+
+### Model 2: Simple Model with Batter Handedness
+
+The second model extends Model 1 but adds batter handedness:
+
+**Predictor variables:**
+
+- All variables from Model 1
+
+- stand: Whether the batter bats left-handed or right-handed
+
+This addition allows the model to capture platoon related adjustments in pitch selection. This is important as certain pitches move more effectively against same-handed versus opposite-handed batters, not to mention a pitcher's strategy changes based on the whether the batter is left-handed or right-handed.
+
+### Model 3: Basic Model with Count and Zone
+
+Model 3 adds onto model 2 but incorporates count information and pitch location history:
+
+**Predictor variables:**
+
+- All variables from Model 2
+
+- balls: Number of balls in the current count
+
+- strikes: Number of strikes in the current count
+
+- lag1_zone: The pitch location zone of the previous pitch
+
+- lag2_zone: The pitch location zone two pitches ago
+
+Count variables capture the strategic dynamic where pitchers facing favorable counts possess greater freedom to throw pitches outside the strike zone, while unfavorable counts necessitate throwing strikes.
+
+### Model 4: Separate Type and Zone Models
+
+The fourth approach constructs two separate models rather than a single integrated model to try to predict the next pitch type and the next pitch location:
+
+- **Type Model**: Predicts only pitch type using all predictor variables
+- **Zone Model**: Predicts only pitch location using all predictor variables
+
+Both models employ the same predictor set but optimize predictions for their respective outcomes independently. Overall accuracy is computed as the proportion of pitches where both type and zone are predicted correctly.
+
+### Model 5: Interaction Model
+
+This model treats pitch type and location as a single joint outcome, predicting specific type-zone combinations rather than modeling them separately.
+
+**Predictor variables:**
+
+- lag1_pitch_type: Previous pitch type
+
+- lag1_zone: Previous pitch zone  
+
+- balls: Current ball count
+
+- strikes: Current strike count
+
+- stand: Batter handedness
+
+Rather than predicting pitch type alone (e.g., "slider"), this model predicts the specific combination (e.g., "slider in zone 14"). This creates a much larger number of outcome categories (potentially 100+ combinations) but captures the interdependence between type and location decisions.
+
+## Model Training and Evaluation
+
+### Data Preparation
+
+As explained earlier, prior to model training, lagged variables were constructed by shifting pitch sequence data within each at-bat. It was made sure that lag variables did not carry over between at-bats meaning the first pitch of each at-bat has no previous pitch, so lag variables are coded as "None."
+
+Categorical variables were properly encoded for inclusion in regression models, with one category designated as the reference level. Observations with missing data for key variables were removed, though the missing data was minimal with less than 0.5% of observations.
+
+### Model Fitting Process
+
+For each pitcher who threw more than a minimum threshold of pitches of 100, individual models were fit using that pitcher's data exclusively. Model fitting uses maximum likelihood estimation implemented through the `nnet` package in R.
+
+The fitting process proceeds iteratively. Starting with initial coefficient estimates, the algorithm computes predicted probabilities, calculates the gradient of the log-likelihood function, and updates coefficients in the direction that increases likelihood. This process repeats until convergence, defined as minimal change in coefficients between iterations.
+
+### Performance Evaluation
+
+Classification accuracy is computed as:
+
+$$\text{Accuracy} = \frac{\text{Number of Correct Predictions}}{\text{Total Number of Predictions}}$$
+
+For each pitch, the model generates predicted probabilities for each possible pitch type. The predicted pitch type is the category with the highest probability. A naive baseline model that always predicts the most common pitch type would achieve accuracy equal to that pitch type's frequency that as discussed earlier, is typically around 30-35%.
+
+## Statistical Comparison of Models
+
+To compare the performance of each model to one another, a few methods were implemented including pairwise comparisons, analysis of variance, and effect size calculations.
+
+### Pairwise Comparisons
+
+Model performance was compared using paired t-tests and Wilcoxon signed-rank tests, which account for the fact that multiple models make predictions for the same pitchers. Both tests provided p-values indicating the strength of evidence against the null hypothesis of no difference.
+
+### Analysis of Variance
+
+Overall differences across all five models were assessed using one-way repeated measures ANOVA. Following a significant ANOVA result, Tukey's Honestly Significant Difference post-hoc test identified which specific model pairs differ significantly.
+
+### Effect Size Calculation
+
+Cohen's d was calculated for each significant pairwise comparison:
+
+$$d = \frac{\bar{x}_1 - \bar{x}_2}{s_{\text{pooled}}}$$
+
+Cohen's d values of 0.2, 0.5, and 0.8 are conventionally interpreted as small, medium, and large effect sizes, respectively.
+
+## Computational Implementation
+
+All data processing, model fitting, and analysis were conducted using R (version 4.3.1 or later). Key packages employed include tidyverse, nnet, caret, and knitr. Total computational time for fitting all five model specifications across all pitchers was approximately 2-4 hours on a computer with standard capabilites.
+
+```{r}
+# Model 1: Simple (2 previous pitches + pitch number)
+model1_models <- readRDS("pitcher_models_simple.rds")
+model1_data <- readRDS("pitch_data_features_simple.rds")
+model1_evals <- readRDS("model_evaluations_simple.rds")
+
+# Model 2: Simple with Stand
+model2_models <- readRDS("pitcher_models_simple_stand.rds")
+model2_data <- readRDS("pitch_data_features_simple_stand.rds")
+model2_evals <- readRDS("model_evaluations_simple_stand.rds")
+
+# Model 3: Basic with count and zone
+model3_models <- readRDS("pitcher_models_basic.rds")
+model3_data <- readRDS("pitch_data_features_basic.rds")
+model3_evals <- readRDS("model_evaluations_basic.rds")
+
+# Model 4: Separate type and zone models
+model4_type_models <- readRDS("pitcher_type_models_separate.rds")
+model4_zone_models <- readRDS("pitcher_zone_models_separate.rds")
+model4_data <- readRDS("pitch_data_features_separate.rds")
+model4_type_evals <- readRDS("type_model_evaluations_separate.rds")
+model4_zone_evals <- readRDS("zone_model_evaluations_separate.rds")
+
+# Model 5: Interaction model
+model5_models <- readRDS("pitcher_interaction_models.rds")
+model5_data <- readRDS("pitch_data_features_interaction.rds")
+model5_evals <- readRDS("interaction_model_evaluations.rds")
+```
+
+# Results
+
+This chapter presents the performance evaluation and comparative analysis of the five multinomial logistic regression model specifications. Results are organized into four major sections: overall model performance comparison, statistical significance testing, pitcher-specific performance patterns, and model complexity analysis. Findings reveal substantial differences in predictive accuracy across model specifications and considerable variation in predictability across individual pitchers.
+
+## Overall Model Performance
+
+```{r}
+extract_accuracy <- function(eval_list, model_name, model_type = "Combined") {
+  if (is.data.frame(eval_list)) {
+    return(eval_list %>%
+             mutate(model = model_name, model_type = model_type))
+  }
+  accuracy_df <- data.frame(
+    pitcher = names(eval_list),
+    accuracy = sapply(eval_list, function(x) {
+      if (is.list(x)) {
+        if ("combined_accuracy" %in% names(x)) {
+          return(x$combined_accuracy)
+        } else if ("accuracy" %in% names(x)) {
+          return(x$accuracy)
+        } else {
+          return(NA)
+        }
+      } else if (is.numeric(x)) {
+        return(x)
+      } else {
+        return(NA)
+      }
+    }),
+    stringsAsFactors = FALSE
+  )
+  
+  accuracy_df <- accuracy_df %>%
+    mutate(model = model_name, model_type = model_type) %>%
+    select(model, model_type, pitcher, accuracy)
+  
+  return(accuracy_df)
+}
+
+model1_accuracy <- extract_accuracy(model1_evals, "Model 1: Simple")
+model2_accuracy <- extract_accuracy(model2_evals, "Model 2: Simple + Stand")
+model3_accuracy <- extract_accuracy(model3_evals, "Model 3: Basic")
+model4_type_accuracy <- extract_accuracy(model4_type_evals, "Model 4: Separate", "Type Only")
+model4_zone_accuracy <- extract_accuracy(model4_zone_evals, "Model 4: Separate", "Zone Only")
+model5_accuracy <- extract_accuracy(model5_evals, "Model 5: Interaction")
+
+all_accuracies <- bind_rows(
+  model1_accuracy,
+  model2_accuracy,
+  model3_accuracy,
+  model4_type_accuracy,
+  model4_zone_accuracy,
+  model5_accuracy)
+
+model4_approx_combined <- all_accuracies %>%
+  filter(model == "Model 4: Separate") %>%
+  select(pitcher, model_type, accuracy) %>%
+  pivot_wider(names_from = model_type, values_from = accuracy) %>%
+  mutate(accuracy = `Type Only` * `Zone Only`, model = "Model 4: Separate", model_type = "Combined (Approximated)") %>%
+  select(model, model_type, pitcher, accuracy)
+
+all_accuracies <- bind_rows(all_accuracies, model4_approx_combined)
+```
+
+### Summary Statistics
+
+```{r}
+overall_model_stats <- all_accuracies %>%
+  mutate(model_combined = ifelse(model == "Model 4: Separate", paste(model, "-", model_type), model)) %>%
+  filter(!model_combined %in% c("Model 4: Separate - Type Only", "Model 4: Separate - Zone Only")) %>%
+  group_by(model_combined) %>%
+  summarise(
+    n_pitchers = n(),
+    mean_accuracy = mean(accuracy, na.rm = TRUE),
+    median_accuracy = median(accuracy, na.rm = TRUE),
+    sd_accuracy = sd(accuracy, na.rm = TRUE),
+    .groups = "drop") %>%
+  arrange(desc(mean_accuracy))
+
+knitr::kable(overall_model_stats,
+             col.names = c("Model", "N Pitchers", "Mean Accuracy", "Median Accuracy", "SD"),
+             digits = 4,
+             caption = "Overall Model Performance Summary")
+```
+
+Table 4.1 displays the distribution of classification accuracy across all pitchers for each of the five model configurations. Model 3 (Basic) achieved the highest mean accuracy at 62.36% (median = 57.82%, SD = 0.1797), making it the best performing model for predicting pitch type. This result is particularly notable given that Model 4's Type Only component, which uses an identical predictor structure to Model 3 but is optimized solely for pitch type prediction, achieved a mean accuracy of 62.38%, which was a difference of only 0.02 percentage points. Because these two models are functionally equivalent for pitch type prediction, Model 4's Type Only output was excluded from this table to avoid redundancy. Instead, Model 4 is represented here by its approximated combined accuracy, which reflects its intended purpose of jointly predicting both pitch type and location.
+
+The simple models (Models 1 and 2) achieved substantially lower accuracy than Model 3. Model 1 (Simple) reached 47.20% mean accuracy (median = 46.37%, SD = 0.1125), while Model 2 (Simple + Stand) improved to 49.75% (median = 49.41%, SD = 0.1070). The addition of batter handedness to the simple model yielded a modest but consistent improvement of 2.55 percentage points, suggesting that platoon considerations contribute meaningfully to pitch selection even in the absence of count information. The similar standard deviations between Models 1 and 2 indicate that adding batter handedness improves accuracy consistently across pitchers rather than benefiting only a subset.
+
+Model 4 (Separate - Combined Approximated) achieved a mean accuracy of 34.32% (median = 18.94%, SD = 0.3044), representing the estimated probability of correctly predicting both pitch type and location zone simultaneously. This figure is an approximation calculated by multiplying each pitcher's Type Only and Zone Only accuracies under the assumption that the two predictions are independent meaning the true combined accuracy would require raw per-pitch prediction data. The extremely large standard deviation (0.3044) and the stark gap between the mean (34.32%) and median (18.94%) indicate severe right-skew in the distribution. This indicates most pitchers have quite low combined accuracy, while a small number of pitchers with highly predictable tendencies in both type and location achieve much higher combined scores. This wide variability reflects the compounding nature of joint prediction as a pitcher must be predictable in both dimensions simultaneously to achieve a high combined accuracy.
+
+Model 5 (Interaction) performed substantially worse than all other specifications, achieving only 23.10% mean accuracy (median = 21.30%, SD = 0.0811). This poor performance reflects the fundamental challenge of predicting joint type-zone outcomes within a single model, where the vast increase of outcome categories (over 100 possible pitch type and zone combinations) creates severe data sparsity. With many type-zone combinations occurring only rarely in a pitcher's season, the model struggles to learn reliable patterns for infrequent events. The narrow standard deviation relative to its mean indicates that this failure is consistent across pitchers, suggesting a structural limitation of the approach rather than a pitcher-specific issue.
+
+### Visualization of Model Performance
+
+```{r fig.cap="Model Accuracy Comparison Across All Pitchers"}
+accuracies_filtered <- all_accuracies %>%
+  filter(!(model == "Model 4: Separate" & model_type %in% c("Type Only", "Zone Only")))
+
+model_summary_stats <- accuracies_filtered %>%
+  group_by(model, model_type) %>%
+  summarise(mean_accuracy = mean(accuracy, na.rm = TRUE), .groups = "drop")
+
+ggplot(accuracies_filtered, aes(x = reorder(paste(model, model_type, sep = " - "), accuracy, FUN = median), y = accuracy, fill = model)) +
+  geom_boxplot(alpha = 0.7) +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 1) +
+  coord_flip() +
+  labs(title = "Model Accuracy Comparison (Box Plots)", subtitle = "Distribution of accuracy across all pitchers", x = "Model", y = "Accuracy", fill = "Model") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14), legend.position = "none")
+```
+
+Figure 4.1 presents boxplots showing substantial variation both across models and within models across different pitchers. The simple models (Models 1 and 2) show relatively narrow, concentrated distributions centered around 45–50% accuracy. This tight clustering indicates that these models perform consistently across pitchers. While absolute accuracy is moderate, the models are reliable in producing similar accuracy regardless of the pitcher being modeled. The limited spread likely reflects these models' reliance on pitch sequencing patterns and batter handedness, which exhibit moderate consistency across pitchers. The interquartile ranges for both models are similarly compact, and the jittered points confirm that few pitchers fall far outside the central tendency.
+
+Model 3 (Basic) displays a much broader distribution, with substantial spread spanning from approximately 30% to over 90% accuracy. This wide variation indicates that the comprehensive model performs very well for some pitchers but struggles with others. The large interquartile range and long right tail suggest that count and location information is highly informative for a subset of pitchers. That subset of pitchers are likely those with strong, consistent tendencies tied to game state, while providing less benefit for pitchers whose selection patterns are less structured. The median sits near 57.82%, but the broad spread of jittered points above 75% confirms that a meaningful number of pitchers are highly predictable under this model.
+
+Model 4 (Separate - Combined Approximated) exhibits the widest distribution of any model, with a very low median near 18.94% but a long right tail extending all the way to 1.0. The interquartile box sits at the low end of the accuracy range, yet the scatter of jittered points across the full range illustrates the high variability inherent in multiplying two independent accuracy values. Pitchers who are simultaneously predictable in both pitch type and location achieve very high combined scores, while those with only moderate accuracy in either dimension see their combined score drop substantially due to the multiplicative penalty.
+
+Model 5 (Interaction) shows a narrow distribution concentrated at low accuracy values around 20–25%, with virtually no observations above 40%, confirming that the fundamental structural limitation of joint type-zone prediction affects all pitchers similarly regardless of individual tendencies. The tight clustering here mirrors Models 1 and 2 in spread, but at a far lower accuracy level.
+
+```{r fig.cap="Accuracy Distribution by Model"}
+accuracies_filtered <- accuracies_filtered %>%
+  mutate(model_label = paste(model, model_type, sep = " - "))
+
+model_summary_stats <- accuracies_filtered %>%
+  group_by(model_label) %>%
+  summarise(mean_accuracy = mean(accuracy, na.rm = TRUE), .groups = "drop")
+
+ggplot(accuracies_filtered, aes(x = accuracy, fill = model_label)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data = model_summary_stats, aes(xintercept = mean_accuracy, color = model_label), linetype = "dashed", size = 1) +
+  labs(title = "Accuracy Distribution by Model", subtitle = "Dashed lines indicate mean accuracy for each model", x = "Accuracy", y = "Density", fill = "Model", color = "Model") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14), legend.position = "bottom", legend.box = "vertical", legend.text = element_text(size = 8)) +
+  guides(fill = guide_legend(nrow = 3), color = guide_legend(nrow = 3)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+```
+
+Figure 4.2's density plots further illustrate the distributional differences across models. Model 5 (Interaction) shows a sharp, narrow peak around 0.20–0.25, confirming consistently poor performance across pitchers with little variation. Model 4 (Separate - Combined Approximated) displays a similarly left-skewed distribution with high density at low accuracy values and a long flat tail extending toward 1.0. Models 1 and 2 show moderately tight distributions centered around 0.47 and 0.50 respectively, with their mean lines closely aligned with their density peaks. Model 3 (Basic) exhibits the broadest and most spread out distribution, with its mean at 0.6236, reflecting the wide variation in how well the full model captures individual pitcher tendencies. The separation between the dashed mean lines across models visually confirms the performance hierarchy established in Table 4.1.
+
+## Statistical Significance Testing
+
+```{r}
+accuracy_comparison <- accuracies_filtered %>%
+  filter(model_type %in% c("Combined", "Combined (Approximated)")) %>%
+  select(model, pitcher, accuracy)
+
+common_pitchers <- accuracy_comparison %>%
+  group_by(pitcher) %>%
+  summarise(n_models = n_distinct(model), .groups = "drop") %>%
+  filter(n_models >= 4) %>%
+  pull(pitcher)
+
+accuracy_comparison <- accuracy_comparison %>%
+  filter(pitcher %in% common_pitchers)
+
+models_to_compare <- unique(accuracy_comparison$model)
+n_models <- length(models_to_compare)
+
+pairwise_results <- data.frame()
+
+for (i in 1:(n_models-1)) {
+  for (j in (i+1):n_models) {
+    model1_name <- models_to_compare[i]
+    model2_name <- models_to_compare[j]
+
+    model1_data <- accuracy_comparison %>%
+      filter(model == model1_name) %>%
+      arrange(pitcher)
+
+    model2_data <- accuracy_comparison %>%
+      filter(model == model2_name) %>%
+      arrange(pitcher)
+
+    common <- intersect(model1_data$pitcher, model2_data$pitcher)
+
+    if (length(common) >= 10) {
+      model1_acc_common <- model1_data %>%
+        filter(pitcher %in% common) %>%
+        arrange(pitcher) %>%
+        pull(accuracy)
+
+      model2_acc_common <- model2_data %>%
+        filter(pitcher %in% common) %>%
+        arrange(pitcher) %>%
+        pull(accuracy)
+
+      if (length(model1_acc_common) == length(model2_acc_common)) {
+        t_test_result <- tryCatch({
+          t.test(model1_acc_common, model2_acc_common, paired = TRUE)
+        }, error = function(e) NULL)
+
+        wilcox_result <- tryCatch({
+          wilcox.test(model1_acc_common, model2_acc_common, paired = TRUE)
+        }, error = function(e) NULL)
+
+        mean_diff <- mean(model1_acc_common - model2_acc_common)
+
+        if (!is.null(t_test_result) && !is.null(wilcox_result)) {
+          pairwise_results <- rbind(pairwise_results, data.frame(
+            Model_1 = model1_name,
+            Model_2 = model2_name,
+            n_pitchers = length(common),
+            mean_diff = mean_diff,
+            t_statistic = t_test_result$statistic,
+            t_p_value = t_test_result$p.value,
+            wilcox_p_value = wilcox_result$p.value,
+            significant_05 = ifelse(t_test_result$p.value < 0.05, "Yes", "No"),
+            significant_01 = ifelse(t_test_result$p.value < 0.01, "Yes", "No")
+          ))
+        }
+      }
+    }
+  }
+}
+```
+
+```{r fig.cap="Pairwise Statistical Significance Tests Between Models"}
+if (nrow(pairwise_results) > 0) {
+  knitr::kable(pairwise_results,
+               col.names = c("Model 1", "Model 2", "N Pitchers", "Mean Diff",
+                             "t-statistic", "t-test p-value", "Wilcoxon p-value",
+                             "Sig. (α=0.05)", "Sig. (α=0.01)"),
+               digits = 4,
+               caption = "Pairwise Statistical Significance Tests Between Models")
+
+  anova_result <- aov(accuracy ~ model, data = accuracy_comparison)
+  anova_summary <- summary(anova_result)
+  print(anova_summary)
+
+  tukey_result <- TukeyHSD(anova_result)
+  print(tukey_result)
+
+  ggplot(pairwise_results, aes(x = paste(Model_1, "\nvs\n", Model_2), y = mean_diff, fill = significant_05)) +
+    geom_bar(stat = "identity") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
+    scale_fill_manual(values = c("No" = "gray", "Yes" = "red"), name = "Significant\n(α=0.05)") +
+    coord_flip() +
+    labs(title = "Mean Accuracy Difference Between Model Pairs", subtitle = "Positive values mean Model 1 performs better", x = "Model Comparison", y = "Mean Accuracy Difference") +
+    theme_minimal() +
+    theme(plot.title = element_text(face = "bold", size = 14))
+
+  for (i in 1:nrow(pairwise_results)) {
+    if (pairwise_results$significant_05[i] == "Yes") {
+      model1_name <- pairwise_results$Model_1[i]
+      model2_name <- pairwise_results$Model_2[i]
+
+      model1_data <- accuracy_comparison %>%
+        filter(model == model1_name) %>%
+        arrange(pitcher)
+
+      model2_data <- accuracy_comparison %>%
+        filter(model == model2_name) %>%
+        arrange(pitcher)
+
+      common <- intersect(model1_data$pitcher, model2_data$pitcher)
+
+      model1_acc <- model1_data %>% filter(pitcher %in% common) %>% pull(accuracy)
+      model2_acc <- model2_data %>% filter(pitcher %in% common) %>% pull(accuracy)
+
+      pooled_sd <- sqrt((sd(model1_acc)^2 + sd(model2_acc)^2) / 2)
+      cohens_d <- (mean(model1_acc) - mean(model2_acc)) / pooled_sd
+
+      cat(paste0(model1_name, " vs ", model2_name, ": Cohen's d = ", round(cohens_d, 3), "\n"))
+      if (abs(cohens_d) < 0.2) cat("  Effect size: Small\n")
+      else if (abs(cohens_d) < 0.5) cat("  Effect size: Medium\n")
+      else cat("  Effect size: Large\n")
+    }
+  }
+}
+```
+
+### Analysis of Variance Results
+
+One-way ANOVA testing for overall differences across the five model configurations revealed extremely strong evidence of performance differences (F(4, 3659) = 483.2, p < 2×10^-16^). This highly significant result confirms that model specification substantially affects prediction accuracy, with differences far too large to be attributable to chance variation. The large F-statistic and near-zero p-value confirm that at least some models differ meaningfully in performance, validating the model comparison approach and justifying proceeding to pairwise comparisons.
+
+### Tukey's HSD Post-Hoc Comparisons
+
+Tukey's Honestly Significant Difference test, which controls family-wise error rate across multiple comparisons, identified significant differences for all ten possible model pairs. Every pairwise comparison yielded p-values well below 0.05, indicating that each model's performance differs significantly from every other model's performance. Here are seven of the notable model comparisons.
+
+**Model 1 vs. Model 2** (Simple vs. Simple + Stand): Model 2 outperformed Model 1 by 2.54 percentage points on average (95% CI: [0.004, 0.050], p = 0.045). This difference, while statistically significant, represents a modest improvement. The narrow confidence interval indicates reasonable precision in this estimate.
+
+**Model 1 vs. Model 3** (Simple vs. Basic):  Model 3 outperformed Model 1 by 15.16 percentage points on average (95% CI: [0.127, 0.177], p < 0.001). This substantial difference demonstrates the considerable value of incorporating count and location information, representing a roughly 32% relative improvement over Model 1's baseline accuracy.
+
+**Model 2 vs. Model 3** (Simple + Stand vs. Basic): Model 3 outperformed Model 2 by 12.62 percentage points (95% CI: [0.101, 0.151], p < 0.001). This isolates the contribution of count and location information beyond what simple sequencing and handedness provide, demonstrating that game state information adds substantial predictive value.
+
+**Model 1 vs. Model 4** (Simple vs. Separate - Combined Approximated): Model 1 outperformed Model 4 by 12.88 percentage points (95% CI: [0.104, 0.154], p < 0.001), reflecting the difficulty of jointly predicting both pitch type and location simultaneously.
+
+**Model 3 vs. Model 4** (Basic vs. Separate - Combined Approximated): Model 3 outperformed Model 4 by 28.04 percentage points (95% CI: [0.255, 0.305], p < 0.001), representing the largest performance gap in any comparison involving Model 4 and underscoring that requiring simultaneous correctness on both type and zone dramatically reduces overall accuracy.
+
+**Model 3 vs. Model 5** (Basic vs. Interaction): Model 3 outperformed Model 5 by 39.26 percentage points (95% CI: [0.366, 0.419], p < 0.001), the largest performance gap observed in any comparison and highlighting the severe limitations of the joint type-zone interaction approach.
+
+**Model 4 vs. Model 5** (Separate - Combined Approximated vs. Interaction): Model 4 outperformed Model 5 by 11.22 percentage points (95% CI: [0.085, 0.139], p < 0.001), indicating that even the approximated combined accuracy of the separate model meaningfully exceeds the interaction model's performance.
+
+### Effect Size Analysis
+
+Cohen's d values confirm that differences are both statistically detectable and practically meaningful across most comparisons. Model 1 vs. Model 2 yielded d = -0.232, a small-to-medium effect indicating that while batter handedness contributes statistically, its practical impact is modest. Model 1 vs. Model 3 (d = -1.011) and Model 2 vs. Model 3 (d = -0.853) both produced large effect sizes, confirming that the addition of count and location information yields substantial real-world improvements. Model 3 vs. Model 4 (d = 1.122) and Model 3 vs. Model 5 (d = 3.413) produced the largest effect sizes, underscoring that Model 3 dramatically outperforms both joint-prediction approaches. Model 4 vs. Model 5 yielded d = 0.428, a medium effect, suggesting that while both approaches struggle with joint prediction, the separate model's approximated combined accuracy meaningfully exceeds the interaction model. Models 1 and 2 versus Model 4 both produced large effect sizes (d = 0.561 and d = 0.676 respectively), reflecting that even simple models outperform the joint prediction approach on a combined accuracy basis.
+
+## Pitcher-Specific Performance
+
+```{r}
+pitcher_pitch_counts <- pitch_data1 %>%
+  count(player_name, name = "total_pitches")
+
+pitcher_performance <- all_accuracies %>%
+  filter(model_type == "Combined") %>%
+  group_by(pitcher) %>%
+  summarise(
+    n_models = n(),
+    mean_accuracy = mean(accuracy, na.rm = TRUE),
+    sd_accuracy = sd(accuracy, na.rm = TRUE),
+    min_accuracy = min(accuracy, na.rm = TRUE),
+    max_accuracy = max(accuracy, na.rm = TRUE),
+    range_accuracy = max_accuracy - min_accuracy,
+    .groups = "drop") %>%
+  left_join(pitcher_pitch_counts, by = c("pitcher" = "player_name")) %>%
+  arrange(desc(mean_accuracy))
+
+top_10_pitchers <- pitcher_performance %>%
+  filter(total_pitches >= 500) %>%
+  head(10)
+
+knitr::kable(top_10_pitchers, col.names = c("Pitcher ID", "N Models", "Mean Accuracy", "SD", "Min Acc", "Max Acc", "Range", "Total Pitches"), digits = 4, caption = "Top 10 Most Predictable Pitchers (Highest Mean Accuracy)")
+```
+
+Table 4.2 presents the ten most predictable pitchers in the dataset with a minimum of 500 pitches thrown, ranked by mean accuracy across all models. Tommy Kahnle leads with 70.26% mean accuracy, followed by Tim Hill (67.56%) and Kenley Jansen (64.25%). Notably, this list is dominated by relief pitchers as Kahnle, Jansen, Hill, Rogers, Clase, and Johnson are all bullpen arms, while Pomeranz, Mattson, Palencia, and Sabrowski are also primarily relievers. This pattern is likely not coincidental. Relief pitchers typically have narrower pitch repertoires than starters, often relying heavily on one or two primary pitches, which makes their selection patterns more systematic and therefore more predictable to a statistical model. Additionally, relief pitchers frequently enter games in high-leverage, specific situations as closers like Clase and Jansen are often deployed in defined roles which may further limit their pitch selection in predictable ways.
+
+The standard deviations for most pitchers in this group are notably high, ranging from 0.2197 (Clase) to 0.3099 (Jansen), indicating that accuracy varies considerably depending on which model is used. This suggests that while these pitchers are genuinely predictable, the degree to which any given model captures their patterns depends heavily on model specification. Even so, the minimum accuracies for pitchers like Kahnle (25.71%) and Jansen (17.78%) show that not all models succeed equally, and the approximated Model 4 combined accuracy likely drives these lower bounds given its multiplicative penalty.
+
+```{r}
+bottom_10_pitchers <- tail(pitcher_performance, 10)
+knitr::kable(bottom_10_pitchers, col.names = c("Pitcher ID", "N Models", "Mean Accuracy", "SD", "Min Acc", "Max Acc", "Range", "Total Pitches"), digits = 4, caption = "Top 10 Least Predictable Pitchers (Lowest Mean Accuracy)")
+```
+
+Table 4.3 presents the ten least predictable pitchers, all of whom are starting pitchers with substantial pitch counts ranging from 1,160 (Darvish) to 2,893 (Alcantara) pitches in the dataset. This stands in direct contrast to the most predictable group and reinforces the relief pitcher vs. starter dynamic observed above. Seth Lugo (22.65%), Yu Darvish (22.88%), and Michael Lorenzen (23.53%) show the lowest mean accuracy values, barely exceeding the random guessing baseline for a multi-class outcome. The presence of accomplished, experienced starters in this group like Darvish, Sandy Alcantara, Walker Buehler, and Cal Quantrill among them, suggests that elite starting pitchers are genuinely difficult to model, likely because they maintain diverse repertoires, adjust sequencing based on batter tendencies, and deliberately avoid falling into predictable patterns across a long outing.
+
+The accuracy ranges for unpredictable pitchers are strikingly narrow compared to the most predictable group. Darvish's accuracy spans only 14.11 percentage points (17.54% to 31.65%), and Lugo's spans just 17.72 percentage points (11.76% to 29.47%), indicating that no model performs well for these pitchers regardless of specification. This consistency in poor performance across all four models suggests that these pitchers' unpredictability is a genuine characteristic of their approach rather than a limitation any particular model can overcome. Taken together, these two tables suggest that the most meaningful predictor of pitcher predictability in this dataset may not be age or experience, but rather role as relief pitchers with defined, narrow repertoires are systematically more predictable than starters who must vary their approach across many batters and innings.
+
+```{r fig.cap="Distribution of Mean Accuracy Across Pitchers"}
+ggplot(pitcher_performance, aes(x = mean_accuracy)) +
+  geom_histogram(binwidth = 0.02, fill = "#3498DB", color = "black", alpha = 0.7) +
+  geom_vline(aes(xintercept = mean(mean_accuracy)), color = "red", linetype = "dashed", size = 1) +
+  annotate("text", x = mean(pitcher_performance$mean_accuracy), y = Inf, label = paste("Mean =", round(mean(pitcher_performance$mean_accuracy), 3)), vjust = 2, color = "red", fontface = "bold") +
+  labs(title = "Distribution of Mean Accuracy Across Pitchers", subtitle = "Average accuracy for each pitcher across all models", x = "Mean Accuracy", y = "Number of Pitchers") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14))
+```
+
+Figure 4.3 presents a histogram of mean accuracy across pitchers, where each pitcher's mean represents their average accuracy across all models for which they have predictions. The overall mean accuracy across all pitchers is 48.09% (median = 45.60%, SD = 13.53%), indicating substantial diversity in pitcher predictability.
+
+The distribution appears approximately normal with slight right-skew, centered around 45-50% accuracy. Approximately 60% of pitchers fall within one standard deviation of the mean (34.5% to 61.6% accuracy). This relatively tight clustering around the middle of the distribution suggests that most pitchers exhibit moderate predictability as neither extremely systematic nor completely random in their pitch selection patterns. The right tail extends to several pitchers achieving mean accuracy above 80%, while the left tail includes pitchers below 30%, reflecting genuine differences in how pitchers approach sequencing.
+
+```{r}
+cor_test <- cor.test(pitcher_performance$mean_accuracy, pitcher_performance$sd_accuracy)
+cat("Correlation between mean accuracy and SD:", round(cor_test$estimate, 4),
+    "(p-value:", round(cor_test$p.value, 4), ")\n")
+```
+
+The correlation between mean accuracy and standard deviation across pitchers is 0.566 (p < 0.001), indicating a moderate positive relationship: more predictable pitchers tend to show greater variation across models. This pattern makes intuitive sense as when clear patterns exist, different models may capture different aspects of those patterns, leading to varying performance. When no clear patterns exist, all models perform poorly and similarly, yielding low standard deviation. This finding confirms that model choice matters primarily when systematic behavior exists to be modeled.
+
+## Model Complexity vs. Performance
+
+```{r fig.cap="Model Efficiency - Accuracy per Complexity Unit"}
+model_complexity <- data.frame(
+  Model = c("Model 1: Simple",
+            "Model 2: Simple + Stand",
+            "Model 3: Basic",
+            "Model 4: Separate - Combined (Approximated)",
+            "Model 5: Interaction"),
+  Num_Features = c(3, 4, 7, 7, 10),
+  Complexity_Score = c(1, 2, 4, 5, 8))
+
+complexity_performance <- model_complexity %>%
+  left_join(
+    overall_model_stats %>%
+      filter(!grepl("Zone Only", model_combined)) %>%
+      filter(!grepl("Type Only", model_combined)) %>%
+      select(model_combined, mean_accuracy),
+    by = c("Model" = "model_combined")) %>%
+  mutate(efficiency = mean_accuracy / Complexity_Score)
+
+ggplot(complexity_performance, aes(x = reorder(Model, efficiency), y = efficiency, fill = Model)) +
+  geom_col(alpha = 0.8, width = 0.7) +
+  geom_text(aes(label = sprintf("%.4f", efficiency)), hjust = -0.1, size = 4, fontface = "bold") +
+  coord_flip() +
+  labs(title = "Model Efficiency: Accuracy per Complexity Unit", subtitle = "Higher values = better performance relative to complexity", x = NULL, y = "Accuracy / Complexity Score") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14), legend.position = "none") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15)))
+```
+
+Figure 4.4 presents model efficiency, calculated as mean accuracy divided by complexity score. Complexity scores were assigned based on the number of distinct predictor features and overall model structure: Model 1 (3 features) = complexity 1, Model 2 (4 features) = complexity 2, Model 3 (7 features) = complexity 4, Model 4 (7 features, two separate models) = complexity 5, and Model 5 (10 features, joint outcome) = complexity 8. Model 1 achieves the highest efficiency score (0.4720), indicating the best performance relative to its complexity. Despite its lower absolute accuracy (47.20%), its minimal complexity yields a strong efficiency ratio. Model 2 shows moderate efficiency (0.2487), while Model 3 achieves an efficiency of 0.1559 despite its highest absolute pitch-type accuracy. Model 4's approximated combined efficiency (0.0686) reflects the compounding penalty of requiring simultaneous correctness of two predictions. Model 5 achieves the lowest efficiency score (0.0289), confirming that its complexity investment yields almost no return in predictive accuracy.
+
+This analysis highlights a fundamental tradeoff: Model 3 achieves the best absolute accuracy for pitch type prediction (62.36%) but requires substantial complexity, while Model 1 achieves moderate accuracy (47.20%) with minimal complexity. Model 4's purpose with jointly predicting both type and zone, introduces an intrinsic accuracy cost that its efficiency score reflects. For practical applications where real-time implementation is critical and interpretability is valued, Model 1's high efficiency may favor it despite lower accuracy. For applications where maximum pitch type accuracy is key and computational resources are available, Model 3's superior absolute performance justifies its complexity.
+
+**Recommendations:**
+
+- **For Maximum Accuracy**: Model 3 (62.36% accuracy), with large effect sizes justifying the added complexity
+- **For Best Efficiency**: Model 1 (47.20% accuracy), optimal for real-time implementation
+- **For Joint Type and Zone Prediction**: Model 4 Separate (34.32% approximated combined accuracy), the only model designed for this purpose
+- **Avoid**: Model 5 (23.10% accuracy), which exhibits catastrophically poor performance at the highest complexity cost
+
+# Discussion
+
+This chapter interprets the findings presented in the Results section, discusses their implications for baseball analytics and practice, acknowledges limitations, and identifies directions for future research.
+
+## Key Findings Summary
+
+This research developed and evaluated five multinomial logistic regression model specifications for predicting pitch sequences in Major League Baseball. Analysis of 712,528 pitches from the 2025 MLB season across 767 pitchers yielded several key findings.
+
+First, Model 3 (Basic) achieved the highest prediction accuracy for pitch type at 62.36%, substantially outperforming simpler alternatives. This comprehensive model, which incorporates count information, previous pitch types, previous pitch locations, and batter handedness, demonstrates that pitch selection is primarily driven by game state, particularly the count, rather than purely by sequential patterns.
+
+Second, simple models achieved adequate but lower performance. Model 1 reached 47.20% accuracy and Model 2 improved to 49.75%, both substantially exceeding random guessing baselines of 30–35%. These results demonstrate that pitch sequencing patterns alone contain meaningful predictive information. The 2.55 percentage point improvement from adding handedness validates platoon considerations, though count information contributes more substantially (12.62 additional points from Model 2 to Model 3).
+
+Third, Model 5 (Interaction) failed catastrophically, achieving only 23.10% accuracy which was worse than random guessing for most pitchers. This failure showed fundamental constraints on model complexity when outcome categories increase. The joint modeling of pitch type and location created 100+ distinct outcome categories, leading to severe data sparsity that prevented reliable parameter estimation.
+
+Fourth, pitcher predictability varies enormously, with mean accuracy ranging from approximately 25% to over 70% among pitchers with at least 500 pitches thrown. This spread is strongly associated with pitcher role rather than age or experience. Relief pitchers with narrow repertoires, such as Tommy Kahnle and Kenley Jansen, dominate the most predictable group, while experienced starting pitchers with diverse arsenals, such as Yu Darvish and Seth Lugo, occupy the least predictable group. This pattern suggests that strategic unpredictability among starters may represent a developed skill rather than merely a failure to establish patterns.
+
+Finally, statistical testing confirmed that performance differences are both significant and meaningful. ANOVA revealed overwhelming evidence of differences across models (F(4, 3659) = 483.2, p < 2×10^-16^), while effect size analysis confirmed large practical differences: Model 3 versus Model 1 yielded d = -1.011 (large effect), while Model 3 versus Model 5 produced d = 3.413 (enormous effect).
+
+## Interpretation
+
+### Why Model 3 Dominates
+
+Model 3's superior performance validates the theoretical framework emphasizing count-dependent pitch selection as baseball's primary strategic dimension. When pitchers face unfavorable counts (more balls than strikes), strategic imperatives force them toward reliable strike-throwing pitches; typically fastballs. Conversely, favorable counts grant freedom to deploy full arsenals, including pitches that might miss the strike zone. These count-driven patterns create predictable behavior that Model 3 exploits by learning pitcher-specific count strategies. For example, how aggressively each pitcher leans on fastballs when behind, how extensively they attack with breaking balls when ahead, and how their sequencing patterns interact with count state.
+
+Model 3's broad accuracy distribution across pitchers reveals that its value depends heavily on pitcher type. For relief pitchers with systematic, count-based strategies and narrow repertoires, it provides substantial advantages. For starting pitchers who deliberately vary their approach across many batters and innings, its additional complexity yields comparatively less benefit, though it still outperforms simpler models on average.
+
+### Why Simple Models Perform Adequately
+
+Models 1 and 2's respectable performance (47-50% accuracy) demonstrates that pitch sequencing patterns exist independently of count considerations. Baseball conventional wisdom about "setting up" hitters by using pitch sequences to disrupt timing and create deception, finds empirical support in these models' above-baseline accuracy. The simple models' narrow, concentrated accuracy distributions indicate consistent performance across diverse pitcher types, suggesting that basic sequencing patterns like fastballs followed by breaking balls, breaking balls in clusters, systematic first-pitch tendencies, occur with moderate regularity across the league regardless of individual pitcher characteristics.
+
+Model 2's modest improvement over Model 1 (2.55 points) through adding handedness confirms platoon effects while revealing their secondary importance relative to count. Pitchers will adjust arsenals based on batter handedness, but these adjustments represent refinements rather than primary determinants of pitch selection. For applications requiring rapid computation, easy interpretation, or deployment with limited data infrastructure, these models offer viable alternatives despite lower absolute accuracy.
+
+### Why the Interaction Model Failed
+
+Model 5's catastrophic failure (23.10% accuracy) reveals fundamental limits on model complexity in the presence of data sparsity. With 7-10 pitch types and 14 zones, potentially 98-140 distinct type-zone combinations exist. Individual pitchers produce 80-100 combinations over a season, but many occur only 5-10 times which is insufficient for stable parameter estimation. Maximum likelihood estimation struggles with rare outcome categories, yielding parameter estimates that are essentially random rather than systematically related to predictors.
+
+The increase of parameters worsens this problem. Each predictor requires a coefficient for each outcome category, creating potentially thousands of parameters to estimate from only 2,000-3,000 pitch observations per pitcher. This parameter-to-observation ratio violates fundamental statistical principles about sample size requirements for stable estimation. The theoretical motivation for joint type-location modeling was sound as pitch type and location clearly relate, but practical implementation encountered insurmountable obstacles. This failure demonstrates that more information and refined relationship modeling can backfire when complexity increases faster than data availability.
+
+### Pitcher-Specific Patterns
+
+The variation in predictability across pitchers reflects genuine strategic diversity rather than simple sampling variation. The most striking finding is the role-based divide between relief pitchers and starters. Relief pitchers dominate the most predictable group, likely because they carry narrower pitch repertoires, enter games in defined high-leverage situations, and often rely on one or two elite pitches rather than sequencing across a full arsenal. Closers like Emmanuel Clase and Kenley Jansen are deployed in specific contexts that constrain their pitch selection in ways statistical models can exploit. Conversely, starting pitchers dominate the least predictable group. Elite veterans like Yu Darvish and Sandy Alcantara who both have substantial pitch counts confirmed this is not a sample size artifact, as they maintain diverse repertoires and adjust sequencing dynamically across a full outing, making their behavior far harder to model. The presence of these accomplished starters among the least predictable pitchers supports the interpretation that unpredictability is a cultivated competitive skill rather than a random characteristic.
+
+The moderate positive correlation between mean accuracy and standard deviation across models (r = 0.566) provides additional insight. When clear patterns exist, different modeling approaches capture different pattern aspects with varying success, yielding high standard deviation. When no clear patterns exist, all models fail similarly, producing low standard deviation despite low mean accuracy. This confirms that model choice matters primarily when organized behavior exists.
+
+## Practical Applications
+
+### Selective Implementation by Opponent
+
+Rather than deploying predictive models universally, teams could implement them selectively based on both opponent predictability and pitcher role. Pre-game analysis identifying relief pitchers where Model 3 accuracy exceeds 60-70% would indicate the most worthwhile targets for real-time prediction, while starting pitchers, who tend to be less predictable and adjust dynamically across outings, may warrant a more conservative deployment threshold.
+
+### Pre-Game Scouting Enhancement
+
+Models could generate comprehensive scouting reports before games, condensed into simple decision rules that hitters memorize. For example, "in two-strike counts after throwing two consecutive fastballs, Pitcher X throws sliders 65% of the time." These memorable patterns could allow hitters to prepare mentally without requiring technological assistance during at-bats. Transforming complex statistical models into instinctively applicable rules of thumb could be useful to comply with current MLB in-game technology rules.
+
+### Pitcher Self-Analysis and Development
+
+Pitchers and pitching coaches could use these models diagnostically to assess their own predictability. A pitcher discovering they are highly predictable (Model 1 achieves 70%+ accuracy) might intentionally introduce more randomness into their sequencing. Conversely, a developing pitcher struggling with consistency might benefit from becoming more systematic, establishing reliable sequencing patterns that allow better execution planning. This self-analysis inverts the traditional use case. As rather than exploiting opponent predictability, pitchers use the model to evaluate and improve their own strategic approach.
+
+## Limitations
+
+### Data and Temporal Limitations
+
+This research analyzed only the 2025 MLB season, providing substantial data (712,528 pitches) but that makes it impossible to tell if the findings hold up over time. Do individual pitchers maintain consistent sequencing patterns across multiple seasons, or do they evolve their approaches over time? Single-season analysis cannot address these questions about pattern persistence and strategic evolution. The pitcher-specific modeling approach also creates sample size challenges for pitchers near minimum thresholds, where parameter estimates may be less stable than for high-workload pitchers with 3,000+ pitches. Additionally, the decision to filter pitcher-specific performance tables to pitchers with a minimum of 500 pitches excludes a portion of the dataset from individual-level analysis. While this threshold ensures more stable model estimates, it means that findings about pitcher predictability reflect only those with sufficient workload and may not generalize to pitchers at the margins of MLB rosters.
+
+### Methodological Limitations
+
+Classification accuracy treats all prediction errors equally: predicting a curveball when a slider was thrown costs the same as predicting a curveball when a fastball was thrown, despite these errors having very different strategic implications. Alternative metrics like logarithmic loss or Brier score could provide more refined assessment by considering probability distributions. Additionally, the absence of formal cross-validation in this research means absolute accuracy figures may be slightly optimistic, as models were evaluated on the same data used for training. However, since all models received identical treatment, relative performance comparisons remain valid.
+
+The static nature of the models being trained on full-season data and applied uniformly, fail to account for within-season dynamics. Pitchers adjust approaches based on effectiveness, opponent adaptations, or physical changes such as fatigue or minor injury. A model trained on April-September data may poorly predict behavior if a pitcher substantially alters their strategy late in the season or during the playoffs.
+
+### Contextual Limitations
+
+This research examines pitch selection in isolation from broader game context: score differential, base-out state, inning, bullpen availability, and defensive positioning. However, these all affect pitch selection but were excluded to preserve implementability. The analysis also treats all pitches as purely pitcher-driven, ignoring catchers' significant role in pitch calling. In modern MLB, catchers influence pitch selection substantially, particularly for younger pitchers who might defer more heavily to catcher judgment, meaning models may miss important catcher-pitcher dynamic effects.
+
+## Future Research Directions
+
+### Multi-Season Temporal Analysis
+
+Analyzing 3-5 seasons of data would enable assessment of temporal stability in pitcher patterns and investigation of how individual pitchers' predictability evolves over careers. Multi-season analysis could also address whether models trained on past seasons successfully predict future seasons, and whether career-stage patterns emerge. Do rookie pitchers show high predictability that decreases as they develop more sophisticated sequencing strategies?
+
+### Hierarchical and Bayesian Modeling
+
+Rather than building completely separate models for each pitcher, hierarchical Bayesian approaches could allow pitchers to "borrow strength" from each other while preserving individual differences. Pitchers with similar characteristics like comparable arsenals, similar roles, comparable experience levels, likely share some strategic patterns. This approach would improve accuracy for pitchers with limited data while maintaining flexibility for well-characterized pitchers. Bayesian methods also measure uncertainty more rigorously, producing a range of possible outcomes that show how confident we can be in each prediction and whether that confidence is high enough to act on.
+
+### Alternative Modeling Frameworks
+
+While multinomial logistic regression worked well, other approaches are worth exploring. Recurrent neural networks could better capture patterns across longer sequences of pitches than the two-pitch look back used here. Hidden Markov Models might uncover hidden strategic tendencies such as whether a pitcher is in an aggressive or cautious mode which could shape their pitch selection. Reinforcement learning could model pitchers as agents who gradually learn the best strategies through experience. Although early testing showed Random Forests and XGBoost offering no real improvement over logistic regression, more advanced combinations of multiple methods might still outperform any single model while also giving better estimates of prediction confidence.
+
+### Substantive Baseball Research Questions
+
+Several substantive questions emerge from this work. Does pitcher predictability correlate with performance metrics like ERA, WHIP, or WAR? And if so, in which direction? Do hitters adjust their approach against predictable pitchers differently than against unpredictable ones, and do patient hitters exploit predictability more effectively than aggressive hitters? Could changes in predictability patterns serve as an early injury indicator, since a pitcher who suddenly becomes predictable may be favoring certain pitches due to discomfort? Finally, controlled field experiments in minor leagues could test whether predictive models actually improve offensive performance when deployed, moving beyond correlational evidence to causal evaluation of model value.
+
+# Conclusion
+
+This research demonstrates that pitch sequences in Major League Baseball exhibit meaningful and exploitable predictability through multinomial logistic regression models incorporating lagged variables. The comprehensive model achieves 62.36% accuracy for pitch type prediction which is a substantial improvement over baseline expectations and a 15-percentage-point advantage over simpler models.
+
+Four key insights emerge from this work. First, pitch selection is fundamentally driven by game state, particularly the count, rather than by simple sequential patterns alone. Second, pitcher predictability varies enormously across individuals and is strongly associated with pitcher role like relief pitchers with narrow repertoires who are systematically more predictable than starting pitchers who vary their approach across full outings. Third, model complexity must be carefully calibrated to available data, as demonstrated by the catastrophic failure of the interaction model when outcome categories expaned beyond what the data could support. Fourth, jointly predicting pitch type and location simultaneously introduces a compounding accuracy penalty, with the approximated combined accuracy of Model 4 (34.32%) reflecting the difficulty of requiring correctness on two dimensions at once.
+
+These findings have practical implications for baseball operations. Teams could deploy models selectively by prioritizing relief pitchers and high-predictability opponents, use them diagnostically for pitcher self-assessment, or integrate predictions into pre-game scouting reports. However, implementation must account for accuracy ceilings leaving 35–40% of pitch type predictions incorrect even under the best model specification.
+
+The methodological contribution extends beyond baseball. The successful integration of categorical lagged variables into multinomial logistic regression provides a framework applicable to diverse sequential categorical prediction problems in healthcare, customer analytics, education, and other domains where behavior unfolds in structured sequences.
+
+Substantial opportunities remain for future research, including multi-season analysis to assess temporal stability, hierarchical Bayesian approaches to improve estimates for low-workload pitchers, and field experiments testing whether predictions improve offensive performance when actually deployed. As baseball continues integrating statistical modeling into strategy, approaches balancing predictive performance against practical implementability and interpretability will prove most valuable.
+
+The question is not whether pitch sequences can be predicted, but rather how much prediction accuracy provides sufficient value to justify the analytical investment, cognitive load, and potential strategic adaptations that widespread deployment would entail. This research establishes that prediction is feasible and achieves non-trivial accuracy and that the most productive targets for deployment are relief pitchers whose defined roles and narrow repertoires make them systematically more transparent to statistical modeling.
+
+# R Shiny App Link
+
+https://b-bruxvoort.shinyapps.io/pitch_type_prediction_app/
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+
+# Appendix - R Code {.unnumbered}
+
+## Appendix A: Model Building Code
+
+### Model 1: Simple Model
+
+```{r eval=FALSE, echo=TRUE, tidy=TRUE, tidy.opts=list(width.cutoff=30)}
+build_simple_pitcher_model <- function(pitcher_data) {
+  tryCatch({
+    model <- multinom(
+      pitch_type ~ prev_pitch_type_1 + prev_pitch_type_2 + pitch_number,
+      data = pitcher_data,
+      maxit = 500,
+      trace = FALSE
+    )
+    return(model)
+  }, error = function(e) {
+    return(NULL)
+  })
+}
+
+pitcher_simple_models <- list()
+
+for (pitcher in pitchers_sufficient_data) {
+  cat("\nBuilding simple model for:", pitcher)
+
+  pitcher_data <- pitch_data_simple %>%
+    filter(player_name == pitcher)
+
+  model <- build_simple_pitcher_model(pitcher_data)
+
+  if (!is.null(model)) {
+    pitcher_simple_models[[pitcher]] <- model
+    cat(" - Success")
+  } else {
+    cat(" - Failed")
+  }
+}
+
+cat("\n\nTotal simple models built:", length(pitcher_simple_models), "\n")
+
+evaluate_simple_pitcher_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type), na.rm = TRUE)
+
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type)
+
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) {
+      NULL
+    })
+
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+simple_model_evaluations <- list()
+
+for (pitcher in names(pitcher_simple_models)) {
+  pitcher_data <- pitch_data_simple %>%
+    filter(player_name == pitcher)
+
+  eval <- evaluate_simple_pitcher_model(pitcher, pitcher_simple_models[[pitcher]], pitcher_data)
+  simple_model_evaluations[[pitcher]] <- eval
+}
+
+simple_accuracy_summary <- data.frame(
+  pitcher = names(simple_model_evaluations),
+  accuracy = sapply(simple_model_evaluations, function(x) x$accuracy),
+  error = sapply(simple_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })) %>%
+  arrange(desc(accuracy))
+print(simple_accuracy_summary)
+
+cat("\n\nSimple Model Statistics:\n")
+cat("Models with errors:", sum(!is.na(simple_accuracy_summary$error)), "\n")
+cat("Models successful:", sum(is.na(simple_accuracy_summary$error) & !is.na(simple_accuracy_summary$accuracy)), "\n")
+cat("Mean accuracy:", round(mean(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Median accuracy:", round(median(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Min accuracy:", round(min(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Max accuracy:", round(max(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+```
+
+### Model 2: Simple Model with Batter Handness (Stand)
+
+```{r eval=FALSE, echo=TRUE, tidy=TRUE, tidy.opts=list(width.cutoff=30)}
+build_simple_pitcher_model <- function(pitcher_data) {
+  tryCatch({
+    model <- multinom(
+      pitch_type ~ prev_pitch_type_1 + prev_pitch_type_2 + pitch_number + stand,
+      data = pitcher_data,
+      maxit = 500,
+      trace = FALSE
+    )
+    return(model)
+  }, error = function(e) {
+    return(NULL)
+  })
+}
+
+pitcher_simple_models <- list()
+
+for (pitcher in pitchers_sufficient_data) {
+  cat("\nBuilding simple model for:", pitcher)
+
+  pitcher_data <- pitch_data_simple %>%
+    filter(player_name == pitcher)
+
+  model <- build_simple_pitcher_model(pitcher_data)
+
+  if (!is.null(model)) {
+    pitcher_simple_models[[pitcher]] <- model
+    cat(" - Success")
+  } else {
+    cat(" - Failed")
+  }
+}
+
+cat("\n\nTotal simple models built:", length(pitcher_simple_models), "\n")
+
+evaluate_simple_pitcher_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type), na.rm = TRUE)
+
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type)
+
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) {
+      NULL
+    })
+
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+simple_model_evaluations <- list()
+
+for (pitcher in names(pitcher_simple_models)) {
+  pitcher_data <- pitch_data_simple %>%
+    filter(player_name == pitcher)
+
+  eval <- evaluate_simple_pitcher_model(pitcher, pitcher_simple_models[[pitcher]], pitcher_data)
+  simple_model_evaluations[[pitcher]] <- eval
+}
+
+simple_accuracy_summary <- data.frame(
+  pitcher = names(simple_model_evaluations),
+  accuracy = sapply(simple_model_evaluations, function(x) x$accuracy),
+  error = sapply(simple_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })) %>%
+  arrange(desc(accuracy))
+
+print(simple_accuracy_summary)
+
+cat("\n\nSimple Model Statistics:\n")
+cat("Models with errors:", sum(!is.na(simple_accuracy_summary$error)), "\n")
+cat("Models successful:", sum(is.na(simple_accuracy_summary$error) & !is.na(simple_accuracy_summary$accuracy)), "\n")
+cat("Mean accuracy:", round(mean(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Median accuracy:", round(median(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Min accuracy:", round(min(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+cat("Max accuracy:", round(max(simple_accuracy_summary$accuracy, na.rm = TRUE), 3), "\n")
+```
+
+### Model 3: Basic Model
+
+```{r eval=FALSE, echo=TRUE, tidy=TRUE, tidy.opts=list(width.cutoff=30)}
+build_pitcher_model <- function(pitcher_data) {
+  tryCatch({
+    model <- multinom(
+      pitch_type ~ prev_pitch_type_1 + prev_zone_1 +
+                   prev_pitch_type_2 + prev_zone_2 +
+                   balls + strikes + stand,
+      data = pitcher_data,
+      maxit = 500,
+      trace = FALSE
+    )
+    return(model)
+  }, error = function(e) {
+    return(NULL)
+  })
+}
+
+pitcher_models <- list()
+
+for (pitcher in pitchers_sufficient_data) {
+  cat("\nBuilding model for:", pitcher)
+
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+
+  model <- build_pitcher_model(pitcher_data)
+
+  if (!is.null(model)) {
+    pitcher_models[[pitcher]] <- model
+    cat(" - Success")
+  } else {
+    cat(" - Failed")
+  }
+}
+
+cat("\n\nTotal models built:", length(pitcher_models))
+
+evaluate_pitcher_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type), na.rm = TRUE)
+
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type)
+
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) {
+      NULL
+    })
+
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+model_evaluations <- list()
+
+for (pitcher in names(pitcher_models)) {
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+
+  eval <- evaluate_pitcher_model(pitcher, pitcher_models[[pitcher]], pitcher_data)
+  model_evaluations[[pitcher]] <- eval
+}
+
+accuracy_summary <- data.frame(
+  pitcher = names(model_evaluations),
+  accuracy = sapply(model_evaluations, function(x) x$accuracy),
+  error = sapply(model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })) %>%
+  arrange(desc(accuracy))
+
+print(accuracy_summary)
+
+cat("\n\nModels with errors:", sum(!is.na(accuracy_summary$error)), "\n")
+cat("Models successful:", sum(is.na(accuracy_summary$error) & !is.na(accuracy_summary$accuracy)), "\n")
+
+if (sum(!is.na(accuracy_summary$error)) > 0) {
+  cat("\n\nExample errors:\n")
+  error_examples <- accuracy_summary %>%
+    filter(!is.na(error)) %>%
+    head(5)
+  print(error_examples)
+}
+```
+
+### Model 4: Separate Type and Zone Models
+
+```{r eval=FALSE, echo=TRUE, tidy=TRUE, tidy.opts=list(width.cutoff=30)}
+build_pitcher_type_model <- function(pitcher_data) {
+  tryCatch({
+    model <- multinom(
+      pitch_type ~ prev_pitch_type_1 + prev_zone_1 +
+                   prev_pitch_type_2 + prev_zone_2 +
+                   balls + strikes + stand,
+      data = pitcher_data,
+      maxit = 500,
+      trace = FALSE
+    )
+    return(model)
+  }, error = function(e) {
+    return(NULL)
+  })
+}
+
+build_pitcher_zone_model <- function(pitcher_data) {
+  tryCatch({
+    model <- multinom(
+      zone ~ prev_pitch_type_1 + prev_zone_1 +
+             prev_pitch_type_2 + prev_zone_2 +
+             balls + strikes + stand,
+      data = pitcher_data,
+      maxit = 500,
+      trace = FALSE
+    )
+    return(model)
+  }, error = function(e) {
+    return(NULL)
+  })
+}
+
+pitcher_type_models <- list()
+pitcher_zone_models <- list()
+
+for (pitcher in pitchers_sufficient_data) {
+  cat("\nBuilding models for:", pitcher)
+
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+
+  type_model <- build_pitcher_type_model(pitcher_data)
+  if (!is.null(type_model)) {
+    pitcher_type_models[[pitcher]] <- type_model
+    cat(" - Type: Success")
+  } else {
+    cat(" - Type: Failed")
+  }
+
+  zone_model <- build_pitcher_zone_model(pitcher_data)
+  if (!is.null(zone_model)) {
+    pitcher_zone_models[[pitcher]] <- zone_model
+    cat(" | Zone: Success")
+  } else {
+    cat(" | Zone: Failed")
+  }
+}
+
+cat("\n\nTotal pitch type models built:", length(pitcher_type_models))
+cat("\nTotal zone models built:", length(pitcher_zone_models))
+
+evaluate_pitcher_type_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type), na.rm = TRUE)
+
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type)
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) NULL)
+
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+evaluate_pitcher_zone_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$zone), na.rm = TRUE)
+
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$zone)
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) NULL)
+
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+type_model_evaluations <- list()
+for (pitcher in names(pitcher_type_models)) {
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+
+  eval <- evaluate_pitcher_type_model(pitcher, pitcher_type_models[[pitcher]], pitcher_data)
+  type_model_evaluations[[pitcher]] <- eval
+}
+
+zone_model_evaluations <- list()
+for (pitcher in names(pitcher_zone_models)) {
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+
+  eval <- evaluate_pitcher_zone_model(pitcher, pitcher_zone_models[[pitcher]], pitcher_data)
+  zone_model_evaluations[[pitcher]] <- eval
+}
+
+type_accuracy_summary <- data.frame(
+  pitcher = names(type_model_evaluations),
+  type_accuracy = sapply(type_model_evaluations, function(x) x$accuracy),
+  type_error = sapply(type_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  }))
+
+zone_accuracy_summary <- data.frame(
+  pitcher = names(zone_model_evaluations),
+  zone_accuracy = sapply(zone_model_evaluations, function(x) x$accuracy),
+  zone_error = sapply(zone_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  }))
+
+combined_accuracy_summary <- type_accuracy_summary %>%
+  full_join(zone_accuracy_summary, by = "pitcher") %>%
+  arrange(desc(type_accuracy))
+print(combined_accuracy_summary)
+
+cat("\n\n=== PITCH TYPE MODEL PERFORMANCE ===\n")
+cat("Models with errors:", sum(!is.na(type_accuracy_summary$type_error)), "\n")
+cat("Models successful:", sum(is.na(type_accuracy_summary$type_error) & !is.na(type_accuracy_summary$type_accuracy)), "\n")
+cat("Mean accuracy:", round(mean(type_accuracy_summary$type_accuracy, na.rm = TRUE), 4), "\n")
+
+cat("\n=== ZONE MODEL PERFORMANCE ===\n")
+cat("Models with errors:", sum(!is.na(zone_accuracy_summary$zone_error)), "\n")
+cat("Models successful:", sum(is.na(zone_accuracy_summary$zone_error) & !is.na(zone_accuracy_summary$zone_accuracy)), "\n")
+cat("Mean accuracy:", round(mean(zone_accuracy_summary$zone_accuracy, na.rm = TRUE), 4), "\n")
+```
+
+### Model 5: Interaction Model
+
+```{r eval=FALSE, echo=TRUE, tidy=TRUE, tidy.opts=list(width.cutoff=30)}
+build_pitcher_interaction_model <- function(pitcher_data) {
+  tryCatch({
+    n_combinations <- n_distinct(pitcher_data$pitch_type_zone)
+    n_pitches <- nrow(pitcher_data)
+
+    cat(" | Combinations:", n_combinations, "| Pitches:", n_pitches)
+
+    if (n_pitches / n_combinations < 5) {
+      cat(" - Too sparse")
+      return(NULL)
+    }
+
+    combination_counts <- pitcher_data %>%
+      count(pitch_type_zone) %>%
+      filter(n >= 3)
+
+    pitcher_data_filtered <- pitcher_data %>%
+      filter(pitch_type_zone %in% combination_counts$pitch_type_zone) %>%
+      mutate(pitch_type_zone = droplevels(pitch_type_zone))
+
+    cat(" | Filtered to:", n_distinct(pitcher_data_filtered$pitch_type_zone), "combinations")
+
+    if (nrow(pitcher_data_filtered) < 50) {
+      cat(" - Insufficient data after filtering")
+      return(NULL)
+    }
+
+    model <- multinom(
+      pitch_type_zone ~ prev_pitch_type_1 + prev_zone_1 +
+                        balls + strikes + stand,
+      data = pitcher_data_filtered,
+      maxit = 1000,
+      trace = FALSE,
+      MaxNWts = 5000
+    )
+    return(model)
+  }, error = function(e) {
+    cat(" - Error:", e$message)
+    return(NULL)
+  })
+}
+
+pitcher_interaction_models <- list()
+
+for (pitcher in pitchers_sufficient_data) {
+  cat("\nBuilding interaction model for:", pitcher)
+
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+
+  model <- build_pitcher_interaction_model(pitcher_data)
+
+  if (!is.null(model)) {
+    pitcher_interaction_models[[pitcher]] <- model
+    cat(" - Success")
+  } else {
+    cat(" - Failed")
+  }
+}
+
+cat("\n\nTotal interaction models built:", length(pitcher_interaction_models))
+
+evaluate_pitcher_interaction_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type_zone), na.rm = TRUE)
+
+    pred_split <- str_split_fixed(as.character(predictions), "_", 2)
+    actual_split <- str_split_fixed(as.character(pitcher_data$pitch_type_zone), "_", 2)
+
+    type_accuracy <- mean(pred_split[,1] == actual_split[,1], na.rm = TRUE)
+    zone_accuracy <- mean(pred_split[,2] == actual_split[,2], na.rm = TRUE)
+
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type_zone)
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) NULL)
+
+    return(list(
+      pitcher = pitcher_name,
+      combined_accuracy = accuracy,
+      type_accuracy = type_accuracy,
+      zone_accuracy = zone_accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      combined_accuracy = NA,
+      type_accuracy = NA,
+      zone_accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+interaction_model_evaluations <- list()
+
+for (pitcher in names(pitcher_interaction_models)) {
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+
+  eval <- evaluate_pitcher_interaction_model(pitcher, pitcher_interaction_models[[pitcher]], pitcher_data)
+  interaction_model_evaluations[[pitcher]] <- eval
+}
+
+interaction_accuracy_summary <- data.frame(
+  pitcher = names(interaction_model_evaluations),
+  combined_accuracy = sapply(interaction_model_evaluations, function(x) x$combined_accuracy),
+  type_accuracy = sapply(interaction_model_evaluations, function(x) x$type_accuracy),
+  zone_accuracy = sapply(interaction_model_evaluations, function(x) x$zone_accuracy),
+  error = sapply(interaction_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })) %>%
+  arrange(desc(combined_accuracy))
+print(interaction_accuracy_summary)
+
+cat("\n\n=== INTERACTION MODEL PERFORMANCE ===\n")
+cat("Models with errors:", sum(!is.na(interaction_accuracy_summary$error)), "\n")
+cat("Models successful:", sum(is.na(interaction_accuracy_summary$error) & !is.na(interaction_accuracy_summary$combined_accuracy)), "\n")
+cat("Mean combined accuracy:", round(mean(interaction_accuracy_summary$combined_accuracy, na.rm = TRUE), 4), "\n")
+cat("Mean type accuracy (from interaction):", round(mean(interaction_accuracy_summary$type_accuracy, na.rm = TRUE), 4), "\n")
+cat("Mean zone accuracy (from interaction):", round(mean(interaction_accuracy_summary$zone_accuracy, na.rm = TRUE), 4), "\n")
+```
+
+
+
+
+
+

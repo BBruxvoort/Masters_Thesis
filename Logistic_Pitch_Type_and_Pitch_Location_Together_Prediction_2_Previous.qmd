@@ -1,0 +1,508 @@
+---
+title: "Pitch Prediction 2"
+author: "Brian Bruxvoort"
+format: pdf
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Load Required Libraries
+
+```{r libraries}
+library(tidyverse)
+library(nnet)  # For multinomial logistic regression
+library(caret) # For confusion matrix and model evaluation
+```
+
+## Option to Load Pre-Built Models
+
+```{r}
+pitcher_interaction_models <- readRDS("pitcher_interaction_models.rds")
+pitch_data_features <- readRDS("pitch_data_features_interaction.rds")
+interaction_model_evaluations <- readRDS("interaction_model_evaluations.rds")
+```
+
+```{r}
+pitch_data <- read.csv("~/Truman_PDAT_630/Thesis_Project/pitch_data.csv")
+```
+
+```{r}
+selected_columns2 <- c(
+  "pitch_type", "player_name", "batter", "pitcher", "events", 
+  "description", "zone", "stand", "p_throws", "type", "hit_location",
+  "bb_type", "balls", "strikes", "pfx_x", "pfx_z", "plate_x", "plate_z",
+  "outs_when_up", "inning", "sz_top", "sz_bot", "effective_speed",
+  "release_spin_rate", "release_extension", "release_pos_y",
+  "at_bat_number", "pitch_number", "pitch_name", "spin_axis",
+  "n_thruorder_pitcher", "arm_angle")
+
+pitch_data_clean2 <- pitch_data[, selected_columns2]
+```
+
+```{r}
+selected_columns <- c(
+  "pitch_type", "player_name", "zone", "stand", "balls", "strikes", "at_bat_number", "pitch_number","n_thruorder_pitcher")
+
+pitch_data_clean <- pitch_data[, selected_columns]
+```
+
+```{r}
+summary(pitch_data_clean)
+```
+
+```{r load-data}
+head(pitch_data_clean)
+```
+
+## Data Preparation: Create Lagged Features and Interaction Variable
+
+```{r create-lagged-features}
+# Sort data by pitcher, at-bat, and pitch number to ensure correct sequence
+pitch_data_sorted <- pitch_data_clean %>%
+  arrange(player_name, at_bat_number, pitch_number)
+
+# Create lagged features for each at-bat
+pitch_data_features <- pitch_data_sorted %>%
+  group_by(player_name, at_bat_number) %>%
+  mutate(
+    # Previous pitch features (lag 1)
+    prev_pitch_type_1 = lag(pitch_type, 1),
+    prev_zone_1 = lag(zone, 1),
+    
+    # Previous pitch features (lag 2)
+    prev_pitch_type_2 = lag(pitch_type, 2),
+    prev_zone_2 = lag(zone, 2),
+    
+    # Previous pitch features (lag 3)
+    prev_pitch_type_3 = lag(pitch_type, 3),
+    prev_zone_3 = lag(zone, 3)
+  ) %>%
+  ungroup() %>%
+  # Remove first pitch of each at-bat (no previous pitch to predict from)
+  filter(!is.na(prev_pitch_type_1)) %>%
+  # Create interaction variable: pitch_type + zone
+  mutate(
+    pitch_type_zone = paste0(pitch_type, "_", zone)
+  ) %>%
+  # Convert categorical variables to factors
+  mutate(
+    pitch_type = as.factor(pitch_type),
+    zone = as.factor(zone),
+    pitch_type_zone = as.factor(pitch_type_zone),
+    prev_pitch_type_1 = as.factor(prev_pitch_type_1),
+    prev_pitch_type_2 = as.factor(prev_pitch_type_2),
+    prev_pitch_type_3 = as.factor(prev_pitch_type_3),
+    prev_zone_1 = as.factor(prev_zone_1),
+    prev_zone_2 = as.factor(prev_zone_2),
+    prev_zone_3 = as.factor(prev_zone_3),
+    stand = as.factor(stand),
+    balls = as.factor(balls),
+    strikes = as.factor(strikes)
+  )
+
+# Check the prepared data
+head(pitch_data_features)
+cat("\n\nInteraction variable created: pitch_type_zone\n")
+cat("Number of unique combinations:", n_distinct(pitch_data_features$pitch_type_zone), "\n")
+```
+
+## Explore Data for Model Building
+
+```{r explore-data}
+# Check number of pitches per pitcher
+pitcher_counts <- pitch_data_features %>%
+  group_by(player_name) %>%
+  summarise(
+    n_pitches = n(),
+    n_pitch_types = n_distinct(pitch_type),
+    n_zones = n_distinct(zone),
+    n_combinations = n_distinct(pitch_type_zone)
+  ) %>%
+  arrange(desc(n_pitches))
+
+print(pitcher_counts)
+
+# Look at overall distribution of combinations
+cat("\n\nOverall distribution of pitch type + zone combinations:\n")
+combination_counts <- pitch_data_features %>%
+  count(pitch_type_zone, sort = TRUE) %>%
+  head(20)
+print(combination_counts)
+
+# Filter pitchers with sufficient data (at least 200 pitches for interaction model)
+# Need significantly more data because we're predicting many more outcome classes
+pitchers_sufficient_data <- pitcher_counts %>%
+  filter(n_pitches >= 200) %>%
+  pull(player_name)
+
+cat("\nNumber of pitchers with sufficient data (>=200 pitches):", length(pitchers_sufficient_data))
+```
+
+## Build Multinomial Logistic Regression Models (Interaction Model)
+
+```{r build-models}
+# # Function to build INTERACTION model (pitch_type + zone combined)
+# build_pitcher_interaction_model <- function(pitcher_data) {
+#   tryCatch({
+#     # Check if there are enough distinct combinations
+#     n_combinations <- n_distinct(pitcher_data$pitch_type_zone)
+#     n_pitches <- nrow(pitcher_data)
+#     
+#     cat(" | Combinations:", n_combinations, "| Pitches:", n_pitches)
+#     
+#    # Need at least 5 observations per combination on average
+#     if (n_pitches / n_combinations < 5) {
+#       cat(" - Too sparse")
+#       return(NULL)
+#     }
+#     
+#     # Filter out very rare combinations (less than 3 occurrences)
+#     combination_counts <- pitcher_data %>%
+#       count(pitch_type_zone) %>%
+#       filter(n >= 3)
+#     
+#     # Keep only common combinations
+#     pitcher_data_filtered <- pitcher_data %>%
+#       filter(pitch_type_zone %in% combination_counts$pitch_type_zone) %>%
+#       mutate(pitch_type_zone = droplevels(pitch_type_zone))
+#     
+#     cat(" | Filtered to:", n_distinct(pitcher_data_filtered$pitch_type_zone), "combinations")
+#     
+#     # Check if still have enough data
+#     if (nrow(pitcher_data_filtered) < 50) {
+#       cat(" - Insufficient data after filtering")
+#       return(NULL)
+#     }
+#     
+#     # Build multinomial logistic regression model for pitch_type_zone interaction
+#     # Use simpler model with just lag 1 to reduce complexity
+#     model <- multinom(
+#       pitch_type_zone ~ prev_pitch_type_1 + prev_zone_1 + 
+#                         balls + strikes + stand,
+#       data = pitcher_data_filtered,
+#       maxit = 1000,
+#       trace = FALSE,
+#       MaxNWts = 5000  # Increase weight limit for complex models
+#     )
+#     return(model)
+#   }, error = function(e) {
+#     cat(" - Error:", e$message)
+#     return(NULL)
+#   })
+# }
+# 
+# # Build interaction models for each pitcher
+# pitcher_interaction_models <- list()
+# 
+# for (pitcher in pitchers_sufficient_data) {
+#   cat("\nBuilding interaction model for:", pitcher)
+#   
+#   pitcher_data <- pitch_data_features %>%
+#     filter(player_name == pitcher)
+#   
+#   model <- build_pitcher_interaction_model(pitcher_data)
+#   
+#   if (!is.null(model)) {
+#     pitcher_interaction_models[[pitcher]] <- model
+#     cat(" - Success")
+#   } else {
+#     cat(" - Failed")
+#   }
+# }
+# 
+# cat("\n\nTotal interaction models built:", length(pitcher_interaction_models))
+```
+
+## Evaluate Model Performance
+
+```{r evaluate-models}
+# Function to evaluate a pitcher's interaction model
+evaluate_pitcher_interaction_model <- function(pitcher_name, model, pitcher_data) {
+  tryCatch({
+    # Make predictions
+    predictions <- predict(model, newdata = pitcher_data, type = "class")
+    
+    # Calculate accuracy
+    accuracy <- mean(as.character(predictions) == as.character(pitcher_data$pitch_type_zone), na.rm = TRUE)
+    
+    # Also calculate type-only and zone-only accuracy from interaction predictions
+    # Extract type and zone from predictions
+    pred_split <- str_split_fixed(as.character(predictions), "_", 2)
+    actual_split <- str_split_fixed(as.character(pitcher_data$pitch_type_zone), "_", 2)
+    
+    type_accuracy <- mean(pred_split[,1] == actual_split[,1], na.rm = TRUE)
+    zone_accuracy <- mean(pred_split[,2] == actual_split[,2], na.rm = TRUE)
+    
+    # Create confusion matrix
+    conf_matrix <- tryCatch({
+      pred_char <- as.character(predictions)
+      actual_char <- as.character(pitcher_data$pitch_type_zone)
+      common_levels <- sort(unique(c(pred_char, actual_char)))
+      
+      confusionMatrix(
+        factor(pred_char, levels = common_levels),
+        factor(actual_char, levels = common_levels)
+      )
+    }, error = function(e) NULL)
+    
+    return(list(
+      pitcher = pitcher_name,
+      combined_accuracy = accuracy,
+      type_accuracy = type_accuracy,
+      zone_accuracy = zone_accuracy,
+      confusion_matrix = conf_matrix,
+      error = NULL
+    ))
+  }, error = function(e) {
+    return(list(
+      pitcher = pitcher_name,
+      combined_accuracy = NA,
+      type_accuracy = NA,
+      zone_accuracy = NA,
+      confusion_matrix = NULL,
+      error = e$message
+    ))
+  })
+}
+
+# Evaluate all interaction models
+interaction_model_evaluations <- list()
+
+for (pitcher in names(pitcher_interaction_models)) {
+  pitcher_data <- pitch_data_features %>%
+    filter(player_name == pitcher)
+  
+  eval <- evaluate_pitcher_interaction_model(pitcher, pitcher_interaction_models[[pitcher]], pitcher_data)
+  interaction_model_evaluations[[pitcher]] <- eval
+}
+
+# Summary of interaction model accuracies
+interaction_accuracy_summary <- data.frame(
+  pitcher = names(interaction_model_evaluations),
+  combined_accuracy = sapply(interaction_model_evaluations, function(x) x$combined_accuracy),
+  type_accuracy = sapply(interaction_model_evaluations, function(x) x$type_accuracy),
+  zone_accuracy = sapply(interaction_model_evaluations, function(x) x$zone_accuracy),
+  error = sapply(interaction_model_evaluations, function(x) {
+    if (!is.null(x$error)) return(x$error) else return(NA)
+  })
+) %>%
+  arrange(desc(combined_accuracy))
+
+print(interaction_accuracy_summary)
+
+# Summary statistics
+cat("\n\n=== INTERACTION MODEL PERFORMANCE ===\n")
+cat("Models with errors:", sum(!is.na(interaction_accuracy_summary$error)), "\n")
+cat("Models successful:", sum(is.na(interaction_accuracy_summary$error) & !is.na(interaction_accuracy_summary$combined_accuracy)), "\n")
+cat("Mean combined accuracy:", round(mean(interaction_accuracy_summary$combined_accuracy, na.rm = TRUE), 4), "\n")
+cat("Mean type accuracy (from interaction):", round(mean(interaction_accuracy_summary$type_accuracy, na.rm = TRUE), 4), "\n")
+cat("Mean zone accuracy (from interaction):", round(mean(interaction_accuracy_summary$zone_accuracy, na.rm = TRUE), 4), "\n")
+```
+
+```{r}
+# # Save the models and data for future use
+# cat("\n\nSaving models and data...\n")
+# saveRDS(pitcher_interaction_models, file = "pitcher_interaction_models.rds")
+# saveRDS(pitch_data_features, file = "pitch_data_features_interaction.rds")
+# saveRDS(interaction_model_evaluations, file = "interaction_model_evaluations.rds")
+# cat("Models saved successfully!\n")
+# cat("Files created:\n")
+# cat("  - pitcher_interaction_models.rds\n")
+# cat("  - pitch_data_features_interaction.rds\n")
+# cat("  - interaction_model_evaluations.rds\n")
+```
+
+## Example: Detailed Results for One Pitcher
+
+```{r example-pitcher}
+# Select the first pitcher with a model
+example_pitcher <- names(pitcher_interaction_models)[1]
+
+cat("Detailed results for:", example_pitcher, "\n\n")
+
+# Show basic model info (much faster than full summary)
+cat("Model Information:\n")
+model <- pitcher_interaction_models[[example_pitcher]]
+cat("Number of outcome classes:", length(model$lev), "\n")
+cat("Outcome classes (first 10):", paste(head(model$lev, 10), collapse = ", "), "\n")
+cat("Number of predictors:", length(model$coefnames), "\n")
+cat("Convergence:", ifelse(model$convergence == 0, "Yes", "No"), "\n")
+
+# Show confusion matrix
+cat("\n\nConfusion Matrix:\n")
+print(interaction_model_evaluations[[example_pitcher]]$confusion_matrix)
+
+# Get just the first 3 rows for example predictions
+example_data <- pitch_data_features %>%
+  filter(player_name == example_pitcher) %>%
+  head(3)  # Only get first 3 pitches
+
+# Make predictions for just these 3 pitches
+predicted_probs <- predict(pitcher_interaction_models[[example_pitcher]], 
+                           newdata = example_data, 
+                           type = "probs")
+
+# Show predictions with probabilities
+cat("\n\nExample Predictions (first 3 pitches):\n")
+cat("Top 5 most likely pitch+zone combinations for each:\n\n")
+
+for (i in 1:nrow(example_data)) {
+  cat("Pitch", i, ":\n")
+  cat("Actual:", as.character(example_data$pitch_type_zone[i]), "\n")
+  
+  # Get top 5 predictions
+  probs_i <- predicted_probs[i, ]
+  top_5 <- sort(probs_i, decreasing = TRUE)[1:5]
+  
+  for (j in 1:5) {
+    cat(sprintf("  %d. %s: %.1f%%\n", j, names(top_5)[j], top_5[j] * 100))
+  }
+  cat("\n")
+}
+```
+
+## Predict Next Pitch Type AND Zone (Interaction Model)
+
+```{r predict-function}
+# Function to predict next pitch using interaction model
+predict_next_pitch_interaction <- function(pitcher_name, prev_pitch_1, prev_zone_1, 
+                                           prev_pitch_2 = NA, prev_zone_2 = NA,
+                                           balls, strikes, stand) {
+  
+  if (!pitcher_name %in% names(pitcher_interaction_models)) {
+    return("No model available for this pitcher")
+  }
+  
+  # Create new data frame for prediction
+  # Note: Only using lag 1 since that's what the model uses
+  new_data <- data.frame(
+    prev_pitch_type_1 = factor(prev_pitch_1, levels = levels(pitch_data_features$prev_pitch_type_1)),
+    prev_zone_1 = factor(prev_zone_1, levels = levels(pitch_data_features$prev_zone_1)),
+    balls = factor(balls, levels = levels(pitch_data_features$balls)),
+    strikes = factor(strikes, levels = levels(pitch_data_features$strikes)),
+    stand = factor(stand, levels = levels(pitch_data_features$stand))
+  )
+  
+  # Get predictions
+  tryCatch({
+    predicted_combination <- predict(pitcher_interaction_models[[pitcher_name]], newdata = new_data, type = "class")
+    combination_probs <- predict(pitcher_interaction_models[[pitcher_name]], newdata = new_data, type = "probs")
+    
+    # Parse the combination
+    combination_split <- str_split_fixed(as.character(predicted_combination), "_", 2)
+    predicted_type <- combination_split[1]
+    predicted_zone <- combination_split[2]
+    
+    # Get top 10 most likely combinations
+    top_probs <- sort(combination_probs, decreasing = TRUE)[1:min(10, length(combination_probs))]
+    
+    return(list(
+      predicted_pitch_type = predicted_type,
+      predicted_zone = predicted_zone,
+      predicted_combination = as.character(predicted_combination),
+      top_probabilities = top_probs
+    ))
+  }, error = function(e) {
+    return(paste("Prediction error:", e$message))
+  })
+}
+
+# Example prediction
+example_prediction <- predict_next_pitch_interaction(
+  pitcher_name = example_pitcher,
+  prev_pitch_1 = "FF",  # Previous pitch was a fastball
+  prev_zone_1 = "2",    # In zone 2
+  prev_pitch_2 = "CH",  # Two pitches ago was a changeup
+  prev_zone_2 = "8",    # In zone 8
+  balls = 1,
+  strikes = 1,
+  stand = "R"           # Right-handed batter
+)
+
+cat("\n\nExample Prediction:\n")
+cat("Predicted pitch type:", example_prediction$predicted_pitch_type, "\n")
+cat("Predicted zone:", example_prediction$predicted_zone, "\n")
+cat("Full combination:", example_prediction$predicted_combination, "\n\n")
+cat("Top 10 most likely pitch+zone combinations:\n")
+for (i in 1:length(example_prediction$top_probabilities)) {
+  cat(sprintf("%2d. %s: %.1f%%\n", i, 
+              names(example_prediction$top_probabilities)[i], 
+              example_prediction$top_probabilities[i] * 100))
+}
+```
+
+## Visualize Results
+
+```{r visualizations}
+# Plot COMBINED accuracy distribution
+ggplot(interaction_accuracy_summary, aes(x = reorder(pitcher, combined_accuracy), y = combined_accuracy)) +
+  geom_bar(stat = "identity", fill = "purple") +
+  coord_flip() +
+  labs(title = "Interaction Model Combined Accuracy by Pitcher",
+       subtitle = "Predicting exact pitch type + zone combination",
+       x = "Pitcher",
+       y = "Combined Accuracy") +
+  theme_minimal() +
+  geom_hline(yintercept = mean(interaction_accuracy_summary$combined_accuracy, na.rm = TRUE), 
+             linetype = "dashed", color = "red") +
+  annotate("text", x = 1, y = mean(interaction_accuracy_summary$combined_accuracy, na.rm = TRUE) + 0.02,
+           label = paste0("Mean: ", round(mean(interaction_accuracy_summary$combined_accuracy, na.rm = TRUE), 3)),
+           color = "red")
+
+# Compare type vs zone accuracy from interaction model
+ggplot(interaction_accuracy_summary, aes(x = type_accuracy, y = zone_accuracy)) +
+  geom_point(size = 3, alpha = 0.6, color = "purple") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Type Accuracy vs. Zone Accuracy (from Interaction Model)",
+       x = "Type Accuracy",
+       y = "Zone Accuracy") +
+  theme_minimal()
+
+# Plot all three metrics together
+interaction_accuracy_long <- interaction_accuracy_summary %>%
+  select(pitcher, combined_accuracy, type_accuracy, zone_accuracy) %>%
+  pivot_longer(cols = c(combined_accuracy, type_accuracy, zone_accuracy),
+               names_to = "metric",
+               values_to = "accuracy") %>%
+  mutate(metric = factor(metric, 
+                        levels = c("combined_accuracy", "type_accuracy", "zone_accuracy"),
+                        labels = c("Combined (Type+Zone)", "Type Only", "Zone Only")))
+
+ggplot(interaction_accuracy_long, aes(x = accuracy, fill = metric)) +
+  geom_histogram(alpha = 0.6, position = "identity", bins = 30) +
+  facet_wrap(~ metric, ncol = 1) +
+  labs(title = "Distribution of Accuracies from Interaction Model",
+       x = "Accuracy",
+       y = "Count") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("purple", "steelblue", "darkgreen"))
+
+# Compare to baseline
+baseline_accuracy <- pitch_data_features %>%
+  group_by(player_name) %>%
+  summarise(
+    most_common_combination = names(which.max(table(pitch_type_zone))),
+    baseline_combined_accuracy = max(table(pitch_type_zone)) / n()
+  )
+
+comparison <- interaction_accuracy_summary %>%
+  left_join(baseline_accuracy, by = c("pitcher" = "player_name")) %>%
+  mutate(improvement = combined_accuracy - baseline_combined_accuracy)
+
+ggplot(comparison, aes(x = baseline_combined_accuracy, y = combined_accuracy)) +
+  geom_point(size = 3, alpha = 0.6, color = "purple") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Interaction Model Combined Accuracy vs. Baseline",
+       x = "Baseline Accuracy (Most Common Combination)",
+       y = "Model Combined Accuracy") +
+  theme_minimal()
+```
+
+## Session Info
+
+```{r session-info}
+sessionInfo()
+```
